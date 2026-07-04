@@ -9,6 +9,7 @@ from first packet to root shell.
 
 | Machine | Platform | OS | Difficulty | Status |
 |---------|----------|----|------------|--------|
+| [Enigma](enigma/) | Hack The Box | Linux | Medium | owned (user + root) |
 | [Connected](connected/) | Hack The Box | Linux | Easy | owned (user + root) |
 | [Nexus](nexus/) | Hack The Box | Linux | Medium | owned (user + root) |
 | [Cap](cap/) | Hack The Box | Linux | Easy | owned (user + root) |
@@ -16,17 +17,20 @@ from first packet to root shell.
 ## Structure
 
 ```
-index.html         landing page (machine index)
+index.html              landing page (machine index)
+
+enigma/index.html       Enigma writeup (self-contained, screenshots inlined)
+enigma/enigma.md        Enigma writeup, markdown
 
 connected/index.html    Connected writeup (self-contained)
 connected/connected.md  Connected writeup, markdown
 
-cap/index.html     Cap writeup (self-contained, screenshots inlined)
-cap/cap.md         Cap writeup, markdown
-cap/cap-0.pcap     the credential-bearing capture (IDOR artifact)
+nexus/index.html        Nexus writeup (self-contained, screenshots inlined)
+nexus/nexus.md          Nexus writeup, markdown
 
-nexus/index.html   Nexus writeup (self-contained, screenshots inlined)
-nexus/nexus.md     Nexus writeup, markdown
+cap/index.html          Cap writeup (self-contained, screenshots inlined)
+cap/cap.md              Cap writeup, markdown
+cap/cap-0.pcap          the credential-bearing capture (IDOR artifact)
 ```
 
 All writeups describe work performed against authorized Hack The Box lab machines.
