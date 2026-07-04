@@ -94,11 +94,20 @@
     <p class="tagline">Writeups from the lab bench — Hack The Box machines charted step by step,
       from the first packet to root. Recon, the bug, the shell, the escalation, and how to close it.</p>
     <div class="runline"><b>$</b> whoami <span class="sep">→</span> ssephi
-      <span class="sep">·</span> <b>$</b> ls machines/ <span class="sep">→</span> 2 owned</div>
+      <span class="sep">·</span> <b>$</b> ls machines/ <span class="sep">→</span> 3 owned</div>
   </header>
 
-  <div class="sect-h" id="machines"><h2>Machines</h2><span class="n">02 / charted</span></div>
+  <div class="sect-h" id="machines"><h2>Machines</h2><span class="n">03 / charted</span></div>
   <div class="grid">
+
+    <a class="post" href="connected/">
+      <div class="row"><h3><span data-morph="title">Connected</span></h3><span class="badge">owned</span></div>
+      <div class="tags"><span class="tag">Hack The Box</span><span class="tag">Linux</span><span class="tag">Easy</span></div>
+      <p class="desc">FreePBX 16.0.40.7 pre-auth RCE (CVE-2025-57819 + CVE-2025-61678) → shell as
+        <code>asterisk</code> → root via <code>incron</code>/<code>sysadmin_manager</code> argument
+        injection (a pipe the params blacklist forgot).</p>
+      <div class="meta"><span>04 · 07 · 2026</span><span class="read">Read →</span></div>
+    </a>
 
     <a class="post" href="nexus/">
       <div class="row"><h3><span data-morph="title">Nexus</span></h3><span class="badge">owned</span></div>

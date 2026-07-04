@@ -9,6 +9,7 @@ from first packet to root shell.
 
 | Machine | Platform | OS | Difficulty | Status |
 |---------|----------|----|------------|--------|
+| [Connected](connected/) | Hack The Box | Linux | Easy | owned (user + root) |
 | [Nexus](nexus/) | Hack The Box | Linux | Medium | owned (user + root) |
 | [Cap](cap/) | Hack The Box | Linux | Easy | owned (user + root) |
 
@@ -16,6 +17,9 @@ from first packet to root shell.
 
 ```
 index.html         landing page (machine index)
+
+connected/index.html    Connected writeup (self-contained)
+connected/connected.md  Connected writeup, markdown
 
 cap/index.html     Cap writeup (self-contained, screenshots inlined)
 cap/cap.md         Cap writeup, markdown
