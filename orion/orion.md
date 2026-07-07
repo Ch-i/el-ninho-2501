@@ -7,7 +7,7 @@ tags: [writeup, 10.129.26.229]
 
 Chain: HTTP/CMS exposure -> credential/hash artifact -> CVE-2025-32432 CMS RCE as `www-data` -> `adam` user flag -> CVE-2026-24061 telnet privilege escalation -> root flag.
 
-![Harness Dashboard Screenshot](orion_dashboard.webp)
+![Static snapshot of the agent harness dashboard showing target details](orion_dashboard.webp)
 
 ## Recon
 
