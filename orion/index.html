@@ -128,7 +128,19 @@
     <div class="eyebrow">01 · recon</div>
     <div class="step-h"><span class="step-n">01</span><h2><span data-morph="title">Reconnaissance</span></h2></div>
     <p>Nmap scan shows two open ports: 22 (SSH) and 80 (HTTP). Directory searching points to `/admin` login routes, identifying a Craft CMS deployment.</p>
-    <pre><code>nmap -sC -sV -p- 10.129.26.229</code></pre>
+    <pre><code>$ nmap -sC -sV -p 22,80 10.129.26.229
+Nmap scan report for orion.htb (10.129.26.229)
+Host is up (0.094s latency).
+
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 8.9p1 Ubuntu 3ubuntu0.15 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   256 3e:ea:45:4b:c5:d1:6d:6f:e2:d4:d1:3b:0a:3d:a9:4f (ECDSA)
+|_  256 64:cc:75:de:4a:e6:a5:b4:73:eb:3f:1b:cf:b4:e3:94 (ED25519)
+80/tcp open  http    nginx 1.18.0 (Ubuntu)
+|_http-title: Orion Telecom
+|_http-server-header: nginx/1.18.0 (Ubuntu)
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel</code></pre>
     <figure>
       <img src="orion_dashboard.webp" alt="Harness Dashboard Screenshot showing exploitation progress">
       <figcaption>Static snapshot capture of the agent harness dashboard showing target details.</figcaption>
