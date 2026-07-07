@@ -7,13 +7,13 @@ tags: [writeup, 10.129.26.229]
 
 Chain: HTTP/CMS exposure -> credential/hash artifact -> CVE-2025-32432 CMS RCE as `www-data` -> `adam` user flag -> CVE-2026-24061 telnet privilege escalation -> root flag.
 
-![Static snapshot of the agent harness dashboard showing target details](orion_dashboard.webp)
-
 ## Recon
 
 1. **Vector: TCP service enumeration**
    - Technique: Port scan/service discovery against `10.129.26.229`
    - Result: `22/tcp ssh` open, `80/tcp http` open
+
+![Nmap Scan Results](../assets/orion_terminal_recon.png)
 
 2. **Vector: HTTP/CMS enumeration**
    - Technique: Review exposed HTTP service
@@ -24,6 +24,8 @@ Chain: HTTP/CMS exposure -> credential/hash artifact -> CVE-2025-32432 CMS RCE a
 3. **Vector: CMS remote code execution**
    - Technique: Exploit `CVE-2025-32432`
    - Result: Shell gained as `www-data`
+
+![Craft CMS Deserialization Exploit via CLI](../assets/orion_terminal_foothold.png)
 
 ## User
 
@@ -36,6 +38,8 @@ Chain: HTTP/CMS exposure -> credential/hash artifact -> CVE-2025-32432 CMS RCE a
 5. **Vector: Telnet privilege escalation**
    - Technique: Exploit `CVE-2026-24061`
    - Result: `root.txt` captured: `REDACTED`
+
+![SUID Telnet argument injection exploit](../assets/orion_terminal_privesc.png)
 
 ## Fixes
 
