@@ -9,6 +9,9 @@ from first packet to root shell.
 
 | Machine | Platform | OS | Difficulty | Status |
 |---------|----------|----|------------|--------|
+| [MakeSense](makesense/) | Hack The Box | Linux | Medium | owned (user + root) |
+| [Orion](orion/) | Hack The Box | Linux | Easy | owned (user + root) |
+| [FireFlow](fireflow/) | Hack The Box | Linux | Medium | user owned |
 | [Enigma](enigma/) | Hack The Box | Linux | Medium | owned (user + root) |
 | [Connected](connected/) | Hack The Box | Linux | Easy | owned (user + root) |
 | [Nexus](nexus/) | Hack The Box | Linux | Medium | owned (user + root) |
@@ -18,6 +21,15 @@ from first packet to root shell.
 
 ```
 index.html              landing page (machine index)
+
+makesense/index.html    MakeSense writeup (self-contained)
+makesense/makesense.md  MakeSense writeup, markdown
+
+orion/index.html        Orion writeup (self-contained, screenshots inlined)
+orion/orion.md          Orion writeup, markdown
+
+fireflow/index.html     FireFlow writeup (self-contained, screenshots inlined)
+fireflow/fireflow.md    FireFlow writeup, markdown
 
 enigma/index.html       Enigma writeup (self-contained, screenshots inlined)
 enigma/enigma.md        Enigma writeup, markdown
