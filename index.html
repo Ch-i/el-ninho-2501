@@ -94,11 +94,18 @@
     <p class="tagline">Writeups from the lab bench — Hack The Box machines charted step by step,
       from the first packet to root. Recon, the bug, the shell, the escalation, and how to close it.</p>
     <div class="runline"><b>$</b> whoami <span class="sep">→</span> ssephi
-      <span class="sep">·</span> <b>$</b> ls machines/ <span class="sep">→</span> 6 owned + 1 user</div>
+      <span class="sep">·</span> <b>$</b> ls machines/ <span class="sep">→</span> 7 owned + 1 user</div>
   </header>
 
-  <div class="sect-h" id="machines"><h2>Machines</h2><span class="n">07 / charted</span></div>
+  <div class="sect-h" id="machines"><h2>Machines</h2><span class="n">08 / charted</span></div>
   <div class="grid">
+
+    <a class="post" href="silentium/">
+      <div class="row"><h3><span data-morph="title">Silentium</span></h3><span class="badge">owned</span></div>
+      <div class="tags"><span class="tag">Hack The Box</span><span class="tag">Linux</span><span class="tag">Hard</span></div>
+      <p class="desc">Flowise 3.0.5 NodeVM sandbox escape via LangChain's <code>TextLoader</code> leaks Docker env vars — SMTP password reused as SSH creds → <code>user.txt</code>. Gogs git service runs as root; <code>CVE-2025-8110</code> symlink bypass overwrites <code>/root/.ssh/authorized_keys</code> → root shell.</p>
+      <div class="meta"><span>13 · 07 · 2026</span><span class="read">Read →</span></div>
+    </a>
 
     <a class="post" href="makesense/">
       <div class="row"><h3><span data-morph="title">MakeSense</span></h3><span class="badge">owned</span></div>
@@ -156,6 +163,7 @@
     </a>
 
     <div class="soon">next machine · charting…</div>
+
 
   </div>
 

