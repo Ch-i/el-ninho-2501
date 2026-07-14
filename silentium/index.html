@@ -222,8 +222,8 @@
 # {"version":"3.0.5"}</code></pre>
 
     <figure>
-      <img src="../assets/silentium_flowise_login_ui_1783961093234.webp" alt="Flowise 3.0.5 login page at staging.silentium.htb">
-      <figcaption>Flowise 3.0.5 login interface at staging.silentium.htb — the primary attack surface.</figcaption>
+      <img src="../assets/silentium_hero.png" alt="Silentium writeup — hero section showing fingerprint card with target details">
+      <figcaption>Silentium target fingerprint — Flowise 3.0.5 on staging.silentium.htb, Gogs on staging-v2-code.dev.silentium.htb.</figcaption>
     </figure>
   </section>
 
@@ -232,11 +232,6 @@
     <div class="eyebrow">02 · foothold</div>
     <div class="step-h"><span class="step-n">02</span><h2><span data-morph="title">Flowise RCE — CVE-2025-59528</span></h2></div>
     <p>Flowise was accessed with credentials <code>ben@silentium.htb</code> / <code>Hacked@HTB2026!</code> (derived from domain + common HTB patterns). The authenticated session revealed the custom function execution endpoint.</p>
-
-    <figure>
-      <img src="../assets/silentium_flowise_authenticated_access_1783969659201.webp" alt="Authenticated Flowise dashboard">
-      <figcaption>Authenticated Flowise session as ben@silentium.htb.</figcaption>
-    </figure>
 
     <p>The Flowise 3.0.5 source registers the route as <code>/node-custom-function</code> (singular — two hours were lost probing the wrong plural form). The endpoint executes arbitrary JavaScript via NodeVM:</p>
     <pre><code>curl -X POST "http://staging.silentium.htb/api/v1/node-custom-function" \
@@ -247,8 +242,8 @@
     <div class="out"><span class="ok">"hello from custom function"</span></div>
 
     <figure>
-      <img src="../assets/silentium_flowise_rce_exploit_1783970255470.webp" alt="Flowise node-custom-function RCE confirmed">
-      <figcaption>CVE-2025-59528 — JavaScript execution via the node-custom-function endpoint confirmed.</figcaption>
+      <img src="../assets/silentium_foothold.png" alt="Flowise node-custom-function RCE confirmed — terminal output showing JS execution">
+      <figcaption>CVE-2025-59528 confirmed — the node-custom-function endpoint executing JavaScript and returning results.</figcaption>
     </figure>
 
     <div class="callout">
@@ -274,8 +269,8 @@
     <p>The sandbox restricts <code>require()</code> calls made <em>inside</em> VM code. It cannot restrict what already-loaded npm packages do internally. LangChain's <code>TextLoader</code> is in Flowise's allowed external dependency list — and it uses the real <code>fs</code> module in its own scope, loaded before the sandbox starts.</p>
 
     <figure>
-      <img src="../assets/silentium_flowise_custom_fn_1783971241370.webp" alt="Flowise custom function panel">
-      <figcaption>The custom function panel — the execution surface for the sandbox escape.</figcaption>
+      <img src="../assets/silentium_sandbox.png" alt="NodeVM sandbox analysis — LangChain TextLoader bypass showing file read">
+      <figcaption>NodeVM sandbox escape — LangChain's TextLoader bypasses the require() allowlist by using the real fs module internally.</figcaption>
     </figure>
 
     <pre><code>// Inside the NodeVM — this works because TextLoader loaded before the sandbox
