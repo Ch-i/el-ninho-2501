@@ -95,10 +95,10 @@
     <p class="tagline">Writeups from the lab bench — Hack The Box machines charted step by step,
       from the first packet to root. Recon, the bug, the shell, the escalation, and how to close it.</p>
     <div class="runline"><b>$</b> whoami <span class="sep">→</span> ssephi
-      <span class="sep">·</span> <b>$</b> ls machines/ <span class="sep">→</span> 9 owned + 1 user</div>
+      <span class="sep">·</span> <b>$</b> ls machines/ <span class="sep">→</span> 10 owned + 1 user</div>
   </header>
 
-  <div class="sect-h" id="machines"><h2>Machines</h2><span class="n">10 / charted</span></div>
+  <div class="sect-h" id="machines"><h2>Machines</h2><span class="n">11 / charted</span></div>
   <div class="grid">
 
     <a class="post" href="nimbus/">
@@ -175,6 +175,14 @@
       <p class="desc">An IDOR leaks another user's packet capture → cleartext FTP credentials →
         password reuse on SSH → <code>cap_setuid</code> on python3.8 for root.</p>
       <div class="meta"><span>03 · 07 · 2026</span><span class="read">Read →</span></div>
+    </a>
+
+
+    <a class="post" href="checkpoint/">
+      <div class="row"><h3><span data-morph="title">Checkpoint</span></h3><span class="badge">owned</span></div>
+      <div class="tags"><span class="tag">Hack The Box</span><span class="tag">Windows</span><span class="tag">Hard</span></div>
+      <p class="desc">Deleted AD object restore → writable <code>DevDrop</code> VSIX execution as <code>ryan.brooks</code> → delegated TGT + BadSuccessor dMSA recovers <code>svc_deploy</code> hash → VM backup Administrator hash reuse → root.</p>
+      <div class="meta"><span>17 · 07 · 2026</span><span class="read">Read →</span></div>
     </a>
 
     <div class="soon">next machine · charting…</div>

