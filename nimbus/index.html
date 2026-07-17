@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nimbus — El Niño · CTF Writeups</title>
+<meta name="description" content="HTB Nimbus hard writeup: SSRF to IMDS, signed SQS injection, unsafe YAML worker execution, LocalStack CodeBuild abuse, BASH_FUNC_id%% hijack, and core_pattern host-root escape.">
+<style>
+  :root{
+    --bg:#fcfcfb; --panel:#ffffff; --ink:#17181d; --ink-2:#3a3d44; --muted:#6b7280;
+    --line:#e7e8ec; --line-2:#d7d9de; --hair:#eef0f2;
+    --accent:#6d28d9; --accent-soft:#f2ecfd; --map:#e4e7ec; --map-2:#eef1f4;
+    --mono:'JetBrains Mono','SF Mono','Cascadia Code',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  canvas#map{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:0 26px 100px}
+  a{color:inherit;text-decoration:none}
+
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;padding:26px 0;
+    font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .brand{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:600;letter-spacing:.01em}
+  .tick{width:10px;height:10px;border:1.5px solid var(--ink);transform:rotate(45deg)}
+
+  /* hero */
+  .hero{padding:52px 0 40px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:8px}
+  h1{font-size:clamp(52px,11vw,116px);line-height:.92;margin:.12em 0 .1em;letter-spacing:-.04em;
+    font-weight:800;text-wrap:balance}
+  .lede{font-size:19px;color:var(--ink-2);max-width:56ch;margin:.5em 0 0;line-height:1.5}
+  .byline{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:22px;
+    display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .byline b{color:var(--ink)}
+  .owned{border:1px solid var(--accent);color:var(--accent);border-radius:2px;
+    padding:2px 8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+  /* fingerprint card */
+  .fp{margin-top:32px;border:1px solid var(--line);border-radius:4px;overflow:hidden;
+    font-family:var(--mono);font-size:13px}
+  .fp .r{display:flex;justify-content:space-between;align-items:center;
+    padding:16px 20px;background:var(--hair);border-bottom:1px solid var(--line)}
+  .name{font-size:22px;font-family:var(--sans);font-weight:700;letter-spacing:-.02em}
+  .chips{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px}
+  .chips b{color:var(--ink)}
+  .rate{text-align:right}.big{font-size:28px}
+  .fp .grid{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0}
+  .fp .grid span{padding:11px 20px;border-bottom:1px solid var(--hair);color:var(--ink-2);font-size:12.5px}
+  .fp .grid span:last-child,.fp .grid span:nth-last-child(2):nth-child(odd){border-bottom:none}
+  .fp .grid b{color:var(--ink)}
+
+  /* sections */
+  section{margin-top:52px}
+  .step-h{display:flex;align-items:baseline;gap:16px;margin-bottom:14px}
+  .step-n{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.1em;
+    padding-top:3px;min-width:22px}
+  h2{font-size:26px;letter-spacing:-.02em;font-weight:700;margin:0}
+  p{color:var(--ink-2);margin:.6em 0}
+  p b, p strong{color:var(--ink)}
+
+  /* chain diagram */
+  .chain{font-family:var(--mono);font-size:13px;line-height:1.9;
+    background:#f9f8ff;border:1px solid var(--line-2);border-left:3px solid var(--accent);
+    border-radius:2px;padding:18px 22px;margin:20px 0;color:var(--ink-2);
+    white-space:pre;overflow-x:auto}
+  .chain b{color:var(--ink)}
+
+  /* code */
+  pre{margin:18px 0;border-radius:3px;overflow-x:auto;
+    background:#f9f8ff;border:1px solid var(--line-2)}
+  pre code{display:block;padding:16px 18px;font-family:var(--mono);font-size:13px;
+    line-height:1.7;color:var(--ink-2)}
+  code{font-family:var(--mono);font-size:.87em;color:var(--accent);
+    background:var(--accent-soft);padding:1px 5px;border-radius:2px}
+  pre code{color:var(--ink-2);background:none;padding:0;font-size:13px}
+
+  /* output block */
+  .out{background:#17181d;border-radius:3px;padding:16px 18px;margin:10px 0;
+    font-family:var(--mono);font-size:12.5px;line-height:1.75;color:#a8b4c8;
+    overflow-x:auto}
+  .out .ok{color:#34d399}.out .hi{color:#a78bfa}.out .warn{color:#fbbf24}
+  .out .flag{color:#f9a8d4;font-weight:600}
+
+  /* dead-ends */
+  .dead{border:1px solid var(--hair);border-radius:3px;padding:14px 18px;margin:12px 0;
+    font-size:14.5px;color:var(--muted)}
+  .dead code{font-size:.85em}
+  .dead-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:18px;
+    display:flex;align-items:center;gap:8px}
+  .dead-label::after{content:"";flex:1;height:1px;background:var(--hair)}
+
+  /* callout / insight */
+  .callout{border-radius:3px;padding:18px 20px;margin:24px 0;
+    background:var(--accent-soft);border:1px solid #ddd6fe}
+  .callout .k{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--accent);font-weight:600;display:block;margin-bottom:6px}
+  .callout p{margin:0;font-size:15px}
+
+  /* insight grid */
+  .insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden;margin:20px 0}
+  .insight-item{background:var(--panel);padding:18px 20px}
+  .insight-item .i-num{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px}
+  .insight-item .i-title{font-size:15px;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+  .insight-item .i-body{font-size:13.5px;color:var(--ink-2);line-height:1.55}
+
+  /* flags */
+  .flags{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+  .flag-box{border:1px solid var(--line-2);border-radius:3px;padding:12px 16px;flex:1;min-width:200px}
+  .flag-box .fl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .flag-box .fv{font-family:var(--mono);font-size:14px;color:var(--accent);
+    font-weight:600;letter-spacing:.03em;word-break:break-all}
+
+  /* figures */
+  figure{margin:22px 0}
+  figure img{width:100%;border-radius:3px;border:1px solid var(--line)}
+  figcaption{font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    margin-top:8px;text-align:center}
+
+  /* table */
+  .tbl-wrap{overflow-x:auto;margin:16px 0}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--muted);font-weight:600}
+  td.mon{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  td.acc{font-family:var(--mono);font-size:12.5px;color:var(--accent);font-weight:600}
+
+  footer{margin-top:64px;padding-top:28px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7}
+  footer a{color:var(--accent)}
+  [data-morph]{white-space:pre}
+  @media(max-width:600px){.fp .grid{grid-template-columns:1fr}.chain{font-size:12px}}
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="../" style="border:none"><span class="tick"></span> el-niño</a>
+    <span>10°N · 90°W</span>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">Hack The Box · machine</div>
+    <h1><span data-morph="hero">Nimbus</span></h1>
+    <p class="lede">An internal job scheduler leaks its AWS-compatible backend. A metadata SSRF becomes temporary web-role credentials, signed SQS job injection, worker execution, and finally a privileged LocalStack CodeBuild escape through <code>core_pattern</code>.</p>
+    <div class="byline">
+      <span>by <b>ssephi</b></span>
+      <span>· 17·07·2026</span>
+      <span>· ~18 min</span>
+      <span class="owned">● fully owned</span>
+    </div>
+
+    <div class="fp">
+      <div class="r">
+        <div>
+          <p class="name" style="margin:0"><span data-morph="title">Nimbus</span></p>
+          <div class="chips">Linux · <b>Hard</b> · LocalStack + workers</div>
+        </div>
+        <div class="rate"><div class="big">🏴</div><div class="chips">user + root</div></div>
+      </div>
+      <div class="grid">
+        <span><b>target</b> &nbsp;10.129.245.218 &nbsp;· &nbsp;nimbus.htb</span>
+        <span><b>22</b>/tcp &nbsp;ssh &nbsp;· OpenSSH 9.6p1 Ubuntu</span>
+        <span><b>80</b>/tcp &nbsp;http &nbsp;· nginx 1.24.0</span>
+        <span><b>backend</b> &nbsp;aws.nimbus.htb &nbsp;· LocalStack-style APIs</span>
+        <span><b>queue</b> &nbsp;floci:4566/847219365028/nimbus-jobs</span>
+        <span><b>pivot</b> &nbsp;IMDS → SQS → worker → CodeBuild</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <h2>The shape of it</h2>
+    <p>Nimbus starts as a small web surface: SSH and nginx. The interesting detail is exposed by <code>/api/v1/health</code>, which names an internal AWS-compatible scheduler endpoint at <code>aws.nimbus.htb</code>. The unauthenticated job preview form accepts either a raw URL or pasted YAML during an Okta migration window.</p>
+    <p>The raw URL path tries to block internal addresses and metadata endpoints, but a decimal-encoded IMDS address bypasses the filter. That returns temporary credentials for <code>nimbus-web-role</code>. The role can list and send to SQS, which is enough to inject jobs into <code>nimbus-jobs</code>. From there, the worker's job format gives script execution inside the worker container.</p>
+
+    <div class="chain">nimbus.htb → /api/v1/health
+  └─ leaks <b>aws.nimbus.htb</b>
+       └─ /jobs/preview URL fetch
+            └─ decimal IMDS bypass: <b>2852039166 == 169.254.169.254</b>
+                 └─ nimbus-web-role temporary credentials
+                      └─ signed SQS <b>SendMessage</b> to nimbus-jobs
+                           └─ worker consumes YAML job
+                                └─ <b>script</b> execution as worker
+                                     └─ /home/worker/user.txt ✓
+
+worker → floci:4566 LocalStack
+  └─ create privileged CodeBuild project
+       └─ <b>BASH_FUNC_id%%</b> fires before floci image exits
+            └─ uid 0, CapEff 000001ffffffffff, Seccomp 0
+                 └─ set <b>core_pattern</b> usermode helper
+                      └─ /proc/%P/root/tmp helper reads host /root/root.txt ✓</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">01 · recon</div>
+    <div class="step-h"><span class="step-n">01</span><h2><span data-morph="title">Recon and Health Leak</span></h2></div>
+    <p>The first pass confirmed the tight surface and the scheduler leak. The health JSON matters more than the landing page: it gives the internal service name, queue, and region hints that shape the rest of the attack.</p>
+
+    <figure>
+      <img src="../assets/nimbus_recon.png" alt="Nimbus recon terminal evidence showing SSH, nginx, and health endpoint leak">
+      <figcaption>Recon and health evidence: <code>nimbus v1.4.2</code>, <code>aws.nimbus.htb</code>, and <code>nimbus-jobs</code>.</figcaption>
+    </figure>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Signal</th><th>Meaning</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr><td class="mon">nimbus.htb</td><td>Job scheduler vhost</td><td class="mon">HTTP 80 redirect + landing page</td></tr>
+          <tr><td class="mon">/api/v1/health</td><td>Backend leak</td><td class="mon">http://aws.nimbus.htb</td></tr>
+          <tr><td class="mon">/jobs</td><td>Unauthenticated submitter</td><td class="mon">raw URL + YAML preview</td></tr>
+          <tr><td class="mon">nimbus-jobs</td><td>Worker queue</td><td class="mon">us-east-1 SQS</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">02 · foothold</div>
+    <div class="step-h"><span class="step-n">02</span><h2><span data-morph="title">SSRF to Signed SQS</span></h2></div>
+    <p>The preview route's internal-address filter catches obvious metadata URLs. Decimal notation slips through: <code>2852039166</code> resolves to <code>169.254.169.254</code>. Adding a YAML-looking query suffix keeps the preview path happy and returns role credentials.</p>
+
+    <pre><code>http://2852039166/latest/meta-data/iam/security-credentials/nimbus-web-role?x=.yaml</code></pre>
+
+    <p>Those credentials were enough for <code>AmazonSQS.ListQueues</code> and <code>AmazonSQS.SendMessage</code> against <code>aws.nimbus.htb</code>. The web role could not receive messages, but send-only access is exactly what the worker pipeline needs.</p>
+
+    <figure>
+      <img src="../assets/nimbus_ssrf_sqs.png" alt="Nimbus terminal evidence showing IMDS credential extraction and signed SQS SendMessage">
+      <figcaption>Metadata SSRF to temporary web-role credentials, then signed SQS access to <code>nimbus-jobs</code>.</figcaption>
+    </figure>
+
+    <div class="callout">
+      <span class="k">Boundary crossed</span>
+      <p>This is where the target stops being a web app and becomes an infrastructure pipeline. The browser-facing preview path becomes a cloud-API signer, and SQS becomes the command delivery lane.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">03 · user</div>
+    <div class="step-h"><span class="step-n">03</span><h2><span data-morph="title">Worker Execution</span></h2></div>
+    <p>Injected jobs were consumed by the internal worker. Two worker behaviors mattered: unsafe YAML handling was reachable, and a <code>script</code> field was executed with Python. That gave reliable code execution as <code>worker</code> inside the container and direct access to <code>/home/worker/user.txt</code>.</p>
+
+    <div class="out">worker job consumed from nimbus-jobs
+uid=1000(worker) gid=1000(worker)
+<span class="flag">user.txt: 5978c680d952efd47bef0fd4455dbf69</span></div>
+
+    <div class="dead-label">dead ends preserved</div>
+    <div class="dead">Lambda execution reached uid 0 in its own runtime container, but <code>/root/root.txt</code> was absent and raw block-device reads failed with <code>Operation not permitted</code>.</div>
+    <div class="dead">Adding SSH keys to <code>/home/worker</code> affected the worker container only; it did not create host SSH access.</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">04 · root</div>
+    <div class="step-h"><span class="step-n">04</span><h2><span data-morph="title">CodeBuild to Host Root</span></h2></div>
+    <p>The root path was LocalStack CodeBuild. The worker can reach <code>floci:4566</code> directly, create a CodeBuild project, and select <code>privilegedMode</code>. The first attempts proved API control but failed because the <code>floci/floci:latest</code> image exited before normal buildspec commands could run.</p>
+    <p>The working bypass was a Bash-exported function named <code>BASH_FUNC_id%%</code>. CodeBuild invoked <code>id</code> early enough that the imported function ran before the build image died. Inside that context, the process was root, privileged, and outside seccomp filtering.</p>
+
+    <pre><code>environmentVariables:[
+  { name: "BASH_FUNC_id%%", value: "() { /bin/sh -c '...'; /usr/bin/id "$@"; }" }
+]</code></pre>
+
+    <p>From there, the payload set <code>kernel.core_pattern</code> to a usermode helper. The trick is <code>%P</code>: it expands to the crashing process PID in the initial namespace, letting the host execute a helper that reaches the container filesystem through <code>/proc/%P/root</code>. The helper reads host <code>/root/root.txt</code>, writes it back into the crashing container's <code>/tmp</code>, and posts the callback.</p>
+
+    <figure>
+      <img src="../assets/nimbus_root.png" alt="Nimbus root terminal evidence showing CodeBuild privilege, core_pattern set, and root flag callback">
+      <figcaption>Root callback from the replayed instance: <code>CORE_FIRED:c04117ef935faf7e7b1b446c6846cd3f</code>.</figcaption>
+    </figure>
+
+    <div class="flags">
+      <div class="flag-box"><div class="fl">user.txt</div><div class="fv">5978c680d952efd47bef0fd4455dbf69</div></div>
+      <div class="flag-box"><div class="fl">root.txt</div><div class="fv">c04117ef935faf7e7b1b446c6846cd3f</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">05 · harness notes</div>
+    <div class="step-h"><span class="step-n">05</span><h2><span data-morph="title">Why Nimbus mattered</span></h2></div>
+    <p>Nimbus was the first writeup where the native harness story is as important as the exploit chain. The useful work was not a single payload; it was context memory over many execution places: local terminal, web SSRF, signed AWS calls, worker container, Lambda sandbox, LocalStack internals, and privileged CodeBuild.</p>
+
+    <div class="insight-grid">
+      <div class="insight-item"><div class="i-num">01</div><div class="i-title">Evidence gates</div><div class="i-body">A result only advanced the plan when it changed the target map: vhost, queue, role, worker context, capability set, or flag.</div></div>
+      <div class="insight-item"><div class="i-num">02</div><div class="i-title">Context memory</div><div class="i-body">The harness kept track of where each command ran, which stopped Lambda container root from being misreported as host root.</div></div>
+      <div class="insight-item"><div class="i-num">03</div><div class="i-title">Replayable finish</div><div class="i-body">When the HTB instance expired, the chain replayed cleanly on <code>10.129.245.218</code> with new flags and fresh artifacts.</div></div>
+    </div>
+
+    <p>The local evidence trail for this replay lives in the harness under <code>docs/generated/nimbus-evidence/commands/117-newip-health.log</code> through <code>121-newip-rootfunc3-decoded.log</code>.</p>
+  </section>
+
+  <footer>
+    <p>Authorized lab work only — Hack The Box machine on a sanctioned network.<br>
+    Kin: metamorphic.live · web3 vuln notes. &nbsp; Charted by ssephi.</p>
+  </footer>
+</div>
+
+<script>
+(function map(){
+  const c=document.getElementById("map"),x=c.getContext("2d");let W,H;
+  function line(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+  function size(){W=c.width=innerWidth*devicePixelRatio;H=c.height=innerHeight*devicePixelRatio;draw();}
+  function draw(){
+    x.clearRect(0,0,W,H);const dpr=devicePixelRatio;
+    x.strokeStyle=line('--map-2');x.lineWidth=1*dpr;
+    for(let gx=0;gx<W;gx+=150*dpr){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
+    for(let gy=0;gy<H;gy+=150*dpr){x.beginPath();x.moveTo(0,gy);x.lineTo(W,gy);x.stroke();}
+    x.strokeStyle=line('--map');x.lineWidth=1.15*dpr;
+    const rings=(cx,cy,rot,n)=>{for(let i=0;i<n;i++){x.globalAlpha=0.9-i*0.05;
+      x.beginPath();x.ellipse(cx,cy,(50+i*46)*dpr,(34+i*32)*dpr,rot,0,7);x.stroke();}};
+    rings(W*0.80,H*0.20,-0.5,9);
+    rings(W*0.14,H*0.86,0.35,7);
+    x.globalAlpha=1;
+  }
+  addEventListener("resize",size);size();
+})();
+
+(function morph(){
+  const GLITCH="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^`";
+  const MODES={brand:{maxActive:2,resolveSpeed:0.04,mutateChance:0.008},
+               title:{maxActive:4,resolveSpeed:0.06,mutateChance:0.015},
+               hero:{maxActive:8,resolveSpeed:0.08,mutateChance:0.025}};
+  const g=()=>GLITCH[Math.floor(Math.random()*GLITCH.length)];
+  const skip=ch=>ch===" "||ch==="."||ch.charCodeAt(0)>127;
+  const units=[];
+  document.querySelectorAll("[data-morph]").forEach(el=>{
+    const cfg=MODES[el.dataset.morph]||MODES.title;
+    const chars=[...el.textContent].map(ch=>{const s=document.createElement("span");
+      s.textContent=ch;s.style.display="inline-block";if(ch===" ")s.style.minWidth="0.28em";
+      return{original:ch,el:s,prog:0,dir:"resolving"};});
+    el.textContent="";chars.forEach(c=>el.appendChild(c.el));units.push({cfg,chars});
+  });
+  if(!units.length||matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+  let last=0;const INT=50;
+  function paint(c){const p=c.prog,e=c.el;
+    if(p>0){e.style.color=`rgba(109,40,217,${0.55+p*0.45})`;
+      e.style.textShadow=p>0.5?`0 0 ${3+p*5}px rgba(109,40,217,${p*0.28})`:"";
+      e.style.transform=`translateY(${(Math.random()-0.5)*p*1.4}px)`;}
+    else{e.style.color="";e.style.textShadow="";e.style.transform="";e.style.transition="color 200ms ease";}}
+  function frame(now){requestAnimationFrame(frame);if(now-last<INT)return;last=now;
+    units.forEach(u=>{let active=u.chars.filter(c=>c.prog>0).length;
+      u.chars.forEach(c=>{if(skip(c.original))return;
+        if(c.dir==="glitching"){c.prog=Math.min(1,c.prog+0.15+Math.random()*0.1);
+          if(c.prog>=1)c.dir="resolving";c.el.textContent=g();}
+        else if(c.prog>0){c.prog=Math.max(0,c.prog-u.cfg.resolveSpeed-Math.random()*0.02);
+          if(c.prog<=0){c.el.textContent=c.original;c.prog=0;}
+          else c.el.textContent=Math.random()<c.prog?g():c.original;}
+        if(c.prog===0&&active<u.cfg.maxActive&&Math.random()<u.cfg.mutateChance){
+          c.dir="glitching";c.prog=0.05;c.el.textContent=g();active++;}
+        paint(c);});});}
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
